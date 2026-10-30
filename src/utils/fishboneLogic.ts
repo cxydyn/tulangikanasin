@@ -54,14 +54,14 @@ export function wrapTextLines(text: string, maxCharsPerLine: number = 32): strin
 
 export function calculateDiagramLayout(
   categoryCount: number,
-  categorySpacing: number = 900
+  categorySpacing: number = 1200
 ) {
-  const startX = 500;
+  const startX = 600;
   const count = Math.max(1, categoryCount);
-  const totalSpineWidth = startX + count * categorySpacing + 200;
-  const viewBoxWidth = Math.max(6000, totalSpineWidth + 1000);
-  const viewBoxHeight = 3500;
-  const spineY = 1750;
+  const totalSpineWidth = startX + count * categorySpacing + 400;
+  const viewBoxWidth = Math.max(7600, totalSpineWidth + 1200);
+  const viewBoxHeight = 3600;
+  const spineY = 1800;
 
   return {
     startX,

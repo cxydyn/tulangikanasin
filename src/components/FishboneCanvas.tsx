@@ -3,15 +3,16 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
-  Move,
   Edit2,
   PlusCircle,
   Trash2,
   Plus,
   Minus,
-  Check,
+  Sparkles,
+  ChevronRight,
+  ShieldAlert,
 } from 'lucide-react';
-import { FishboneCategory, FishboneCause, FishboneSettings } from '../types/fishbone';
+import { FishboneCategory, FishboneSettings } from '../types/fishbone';
 import { calculateDiagramLayout, wrapTextLines } from '../utils/fishboneLogic';
 
 interface FishboneCanvasProps {
@@ -40,6 +41,89 @@ interface ContextMenuState {
   detailIndex?: number;
 }
 
+const CATEGORY_COLORS: Record<
+  string,
+  {
+    bg: string;
+    border: string;
+    header: string;
+    text: string;
+    accent: string;
+    badgeBg: string;
+    badgeText: string;
+  }
+> = {
+  machine: {
+    bg: '#f8fafc',
+    border: '#0284c7',
+    header: '#0369a1',
+    text: '#0f172a',
+    accent: '#38bdf8',
+    badgeBg: '#e0f2fe',
+    badgeText: '#0369a1',
+  },
+  method: {
+    bg: '#f8fafc',
+    border: '#6366f1',
+    header: '#4338ca',
+    text: '#0f172a',
+    accent: '#818cf8',
+    badgeBg: '#e0e7ff',
+    badgeText: '#3730a3',
+  },
+  material: {
+    bg: '#f8fafc',
+    border: '#d97706',
+    header: '#b45309',
+    text: '#0f172a',
+    accent: '#fbbf24',
+    badgeBg: '#fef3c7',
+    badgeText: '#92400e',
+  },
+  measurement: {
+    bg: '#f8fafc',
+    border: '#7c3aed',
+    header: '#6d28d9',
+    text: '#0f172a',
+    accent: '#a78bfa',
+    badgeBg: '#ede9fe',
+    badgeText: '#5b21b6',
+  },
+  man: {
+    bg: '#f8fafc',
+    border: '#059669',
+    header: '#047857',
+    text: '#0f172a',
+    accent: '#34d399',
+    badgeBg: '#d1fae5',
+    badgeText: '#065f46',
+  },
+  environment: {
+    bg: '#f8fafc',
+    border: '#0d9488',
+    header: '#0f766e',
+    text: '#0f172a',
+    accent: '#2dd4bf',
+    badgeBg: '#ccfbf1',
+    badgeText: '#115e59',
+  },
+};
+
+function getCategoryColor(name: string) {
+  const key = (name || '').toLowerCase().trim();
+  return (
+    CATEGORY_COLORS[key] || {
+      bg: '#f8fafc',
+      border: '#0284c7',
+      header: '#0369a1',
+      text: '#0f172a',
+      accent: '#38bdf8',
+      badgeBg: '#e0f2fe',
+      badgeText: '#0369a1',
+    }
+  );
+}
+
 export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
   categories,
   problem,
@@ -52,11 +136,12 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  // Pan and zoom states (default 1.0 matches the SVG viewBox naturally)
+  // Pan and zoom states
   const [scale, setScale] = useState<number>(1.0);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState<boolean>(false);
   const startPanRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragInitialPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Dragging elements
   const [draggingTarget, setDraggingTarget] = useState<{
@@ -65,7 +150,6 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
     causeIndex?: number;
   } | null>(null);
   const dragStartMouseRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const dragInitialPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Custom Head position offset if dragged
   const [headCustomX, setHeadCustomX] = useState<number | null>(null);
@@ -78,9 +162,10 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
     type: 'problem',
   });
 
-  const layout = calculateDiagramLayout(categories.length, settings.categorySpacing);
+  const categorySpacing = settings.categorySpacing || 1200;
+  const layout = calculateDiagramLayout(categories.length, categorySpacing);
   const headX = headCustomX !== null ? headCustomX : layout.totalSpineWidth;
-  const spineEndY = layout.spineY;
+  const spineY = layout.spineY;
 
   // Fit view automatically
   const handleAutoFit = useCallback(() => {
@@ -95,19 +180,19 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
 
   // Handle Zoom In / Out
   const zoom = (factor: number) => {
-    setScale((prev) => Math.min(2.5, Math.max(0.08, prev * factor)));
+    setScale((prev) => Math.min(2.5, Math.max(0.4, prev * factor)));
   };
 
   // Wheel zoom handler
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.08 : 0.92;
-    setScale((prev) => Math.min(2.5, Math.max(0.08, prev * factor)));
+    setScale((prev) => Math.min(2.5, Math.max(0.4, prev * factor)));
   };
 
   // Pan Mouse Down
   const handleMouseDownBackground = (e: React.MouseEvent) => {
-    if (e.button !== 0) return; // Only primary button
+    if (e.button !== 0) return;
     setIsPanning(true);
     startPanRef.current = { x: e.clientX, y: e.clientY };
     dragInitialPosRef.current = { x: pan.x, y: pan.y };
@@ -120,7 +205,7 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
     if (e.button !== 0) return;
     setDraggingTarget({ type: 'head' });
     dragStartMouseRef.current = { x: e.clientX, y: e.clientY };
-    dragInitialPosRef.current = { x: headX, y: spineEndY };
+    dragInitialPosRef.current = { x: headX, y: spineY };
   };
 
   // Dragging Category Mouse Down
@@ -135,7 +220,7 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
     };
   };
 
-  // Mouse Move listener (Window-level for smooth dragging outside SVG)
+  // Mouse Move listener
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       const containerW = containerRef.current?.clientWidth || 1200;
@@ -153,7 +238,7 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
         const dy = ((e.clientY - dragStartMouseRef.current.y) * svgRatio) / scale;
 
         if (draggingTarget.type === 'head') {
-          setHeadCustomX(Math.max(2000, dragInitialPosRef.current.x + dx));
+          setHeadCustomX(Math.max(2500, dragInitialPosRef.current.x + dx));
         } else if (draggingTarget.type === 'category' && draggingTarget.catIndex !== undefined) {
           const idx = draggingTarget.catIndex;
           const updated = [...categories];
@@ -259,7 +344,7 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
     setContextMenu((prev) => ({ ...prev, visible: false }));
   };
 
-  // Theme palettes
+  // Theme styles
   const themeStyles = {
     ocean: {
       spine: '#005a8d',
@@ -285,45 +370,111 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
   }[settings.theme || 'ocean'];
 
   const fontScale = settings.fontScale || 1.0;
-  const problemLines = wrapTextLines(problem || 'Masalah Utama', 18);
+  const problemLines = wrapTextLines(problem || 'Masalah Utama', 16);
+
+  // Quick adjust spacing
+  const handleAdjustSpacing = (delta: number) => {
+    const current = settings.categorySpacing || 1200;
+    const next = Math.max(700, Math.min(1800, current + delta));
+    onUpdateSettings({ categorySpacing: next });
+  };
+
+  // Quick adjust font scale
+  const handleAdjustFont = (delta: number) => {
+    const current = settings.fontScale || 1.0;
+    const next = Math.max(0.7, Math.min(1.5, Math.round((current + delta) * 10) / 10));
+    onUpdateSettings({ fontScale: next });
+  };
 
   return (
     <div className="relative w-full bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden print-page-diagram">
       {/* Canvas Floating Toolbar */}
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 bg-white/90 backdrop-blur-md border border-slate-200 shadow-md rounded-lg p-1.5 no-print">
-        <button
-          type="button"
-          onClick={() => zoom(1.15)}
-          title="Perbesar Tampilan (Zoom In)"
-          className="p-1.5 text-slate-700 hover:text-sky-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
-        >
-          <ZoomIn className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => zoom(0.85)}
-          title="Perkecil Tampilan (Zoom Out)"
-          className="p-1.5 text-slate-700 hover:text-sky-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
-        >
-          <ZoomOut className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onClick={handleAutoFit}
-          title="Pusatkan Tampilan (Auto Fit)"
-          className="p-1.5 text-slate-700 hover:text-sky-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
-        >
-          <Maximize2 className="w-4 h-4" />
-        </button>
+      <div className="absolute top-4 right-4 z-20 flex flex-wrap items-center gap-1.5 bg-white/95 backdrop-blur-md border border-slate-200 shadow-md rounded-lg p-1.5 no-print text-xs">
+        {/* Zoom */}
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => zoom(1.15)}
+            title="Perbesar Tampilan (Zoom In)"
+            className="p-1.5 text-slate-700 hover:text-sky-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => zoom(0.85)}
+            title="Perkecil Tampilan (Zoom Out)"
+            className="p-1.5 text-slate-700 hover:text-sky-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleAutoFit}
+            title="Pusatkan Tampilan (Auto Fit)"
+            className="p-1.5 text-slate-700 hover:text-sky-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
+        </div>
+
         <div className="h-4 w-px bg-slate-200 mx-0.5" />
-        <span className="text-[11px] font-semibold text-slate-500 px-1 font-mono">
-          {Math.round(scale * 100)}%
-        </span>
+
+        {/* Spacing Adjustment */}
+        <div className="flex items-center gap-1 px-1">
+          <span className="text-[11px] font-medium text-slate-500">Jarak:</span>
+          <button
+            type="button"
+            onClick={() => handleAdjustSpacing(-100)}
+            title="Persempit Jarak Tulang (-100px)"
+            className="px-1.5 py-0.5 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-sm font-bold text-xs cursor-pointer"
+          >
+            -
+          </button>
+          <span className="font-mono text-[11px] font-bold text-sky-900 w-12 text-center">
+            {categorySpacing}px
+          </span>
+          <button
+            type="button"
+            onClick={() => handleAdjustSpacing(100)}
+            title="Perlebar Jarak Tulang (+100px)"
+            className="px-1.5 py-0.5 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-sm font-bold text-xs cursor-pointer"
+          >
+            +
+          </button>
+        </div>
+
+        <div className="h-4 w-px bg-slate-200 mx-0.5" />
+
+        {/* Font Adjustment */}
+        <div className="flex items-center gap-1 px-1">
+          <span className="text-[11px] font-medium text-slate-500">Font:</span>
+          <button
+            type="button"
+            onClick={() => handleAdjustFont(-0.1)}
+            title="Perkecil Font"
+            className="px-1.5 py-0.5 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-sm text-xs cursor-pointer font-bold"
+          >
+            A-
+          </button>
+          <span className="font-mono text-[11px] font-bold text-sky-900 w-9 text-center">
+            {Math.round(fontScale * 100)}%
+          </span>
+          <button
+            type="button"
+            onClick={() => handleAdjustFont(0.1)}
+            title="Perbesar Font"
+            className="px-1.5 py-0.5 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-sm text-xs cursor-pointer font-bold"
+          >
+            A+
+          </button>
+        </div>
       </div>
 
       {/* Guide Help Hint */}
-      <div className="absolute bottom-3 left-4 z-20 text-[11px] text-slate-400 bg-white/80 backdrop-blur-xs px-2.5 py-1 rounded-md border border-slate-200/60 pointer-events-none no-print">
-        <span>Geser kanvas untuk panning · Drag kepala/tulang untuk reposisi · Klik kanan/Double-click untuk edit</span>
+      <div className="absolute bottom-3 left-4 z-20 text-[11px] text-slate-500 bg-white/90 backdrop-blur-xs px-3 py-1.5 rounded-md border border-slate-200 shadow-2xs pointer-events-none no-print flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-sky-600 inline-block" />
+        <span>Struktur Anti-Collision: Setiap penyebab dikelompokkan dalam kartu terpisah yang rapi dan mudah dibaca</span>
       </div>
 
       {/* Main SVG Viewport */}
@@ -331,7 +482,7 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
         ref={containerRef}
         onWheel={handleWheel}
         onMouseDown={handleMouseDownBackground}
-        className={`w-full h-[620px] lg:h-[700px] overflow-hidden select-none bg-slate-50/40 ${
+        className={`w-full h-[680px] lg:h-[760px] overflow-hidden select-none bg-slate-50/50 ${
           isPanning ? 'cursor-grabbing' : 'cursor-grab'
         }`}
       >
@@ -343,7 +494,10 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
         >
           <defs>
             <filter id="shadow" x="-5%" y="-5%" width="120%" height="120%">
-              <feDropShadow dx="8" dy="8" stdDeviation="6" floodOpacity="0.25" />
+              <feDropShadow dx="0" dy="6" stdDeviation="8" floodColor="#0f172a" floodOpacity="0.08" />
+            </filter>
+            <filter id="head-shadow" x="-10%" y="-10%" width="130%" height="130%">
+              <feDropShadow dx="8" dy="8" stdDeviation="10" floodColor="#000000" floodOpacity="0.25" />
             </filter>
           </defs>
 
@@ -359,32 +513,32 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
               stroke="#e2e8f0"
               strokeWidth="4"
               strokeDasharray="40,20"
-              rx="20"
+              rx="24"
             />
 
-            {/* Main Spine Line */}
+            {/* Main Central Spine Line */}
             <line
-              x1="100"
-              y1={layout.spineY}
+              x1="120"
+              y1={spineY}
               x2={headX}
-              y2={layout.spineY}
+              y2={spineY}
               stroke={themeStyles.spine}
-              strokeWidth="14"
+              strokeWidth="16"
               strokeLinecap="round"
             />
 
             {/* Fish Tail (Left end of spine) */}
-            <g transform={`translate(100, ${layout.spineY})`}>
+            <g transform={`translate(120, ${spineY})`}>
               <path
-                d="M0,0 L-140,-120 L-100,0 L-140,120 Z"
+                d="M0,0 L-160,-140 L-110,0 L-160,140 Z"
                 fill={themeStyles.spine}
-                opacity="0.9"
+                opacity="0.95"
               />
             </g>
 
             {/* Fish Head Group (Right end) */}
             <g
-              transform={`translate(${headX}, ${layout.spineY}) scale(${settings.headScale || 1.0})`}
+              transform={`translate(${headX}, ${spineY}) scale(${settings.headScale || 1.0})`}
               className="cursor-move group"
               onMouseDown={handleMouseDownHead}
               onContextMenu={(e) => openContextMenu(e, 'problem')}
@@ -394,31 +548,31 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
             >
               {/* Fish Head Polygon Shape with Eye */}
               <path
-                d="M0,-240 L760,0 L0,240 L60,0 Z"
+                d="M0,-280 L840,0 L0,280 L70,0 Z"
                 fill={themeStyles.head}
-                filter="url(#shadow)"
+                filter="url(#head-shadow)"
                 className="transition-colors group-hover:brightness-110"
               />
               {/* Fish Eye Detail */}
-              <circle cx="580" cy="-60" r="16" fill="white" />
-              <circle cx="584" cy="-60" r="8" fill="#0f172a" />
+              <circle cx="640" cy="-70" r="18" fill="white" />
+              <circle cx="644" cy="-70" r="9" fill="#0f172a" />
 
               {/* Problem Text in Head */}
               <text
-                x="330"
+                x="380"
                 y="0"
                 textAnchor="middle"
                 dominantBaseline="central"
                 fill="#ffffff"
                 fontWeight="800"
-                fontSize={`${52 * fontScale}px`}
+                fontSize={`${56 * fontScale}px`}
                 className="problem-text"
               >
                 {problemLines.map((line, idx) => (
                   <tspan
                     key={idx}
-                    x="330"
-                    dy={idx === 0 ? `-${(problemLines.length - 1) * 32}px` : '64px'}
+                    x="380"
+                    dy={idx === 0 ? `-${(problemLines.length - 1) * 36}px` : '72px'}
                   >
                     {line}
                   </tspan>
@@ -426,20 +580,24 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
               </text>
             </g>
 
-            {/* Bones Layer: 6M Categories and Branches */}
+            {/* Bones Layer: 6M Categories and Anti-Collision Cause Cards */}
             <g id="bones-layer">
               {categories.map((cat, catIndex) => {
                 const isTop = cat.isTop;
                 const baseX =
                   layout.startX +
-                  catIndex * settings.categorySpacing +
+                  catIndex * categorySpacing +
                   (cat.customX || 0);
-                const baseY = layout.spineY + (cat.customY || 0);
+                const baseY = spineY + (cat.customY || 0);
 
-                const boneLength = 1350;
-                const angleRad = ((isTop ? -60 : 60) * Math.PI) / 180;
+                // Slanted 55-degree bone
+                const boneLength = 1500;
+                const angleRad = ((isTop ? -55 : 55) * Math.PI) / 180;
                 const xEnd = baseX + boneLength * Math.cos(angleRad);
                 const yEnd = baseY + boneLength * Math.sin(angleRad);
+
+                const colTheme = getCategoryColor(cat.category);
+                const causesCount = cat.causes.length;
 
                 return (
                   <g
@@ -453,32 +611,27 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                       y1={baseY}
                       x2={xEnd}
                       y2={yEnd}
-                      stroke={themeStyles.bone}
-                      strokeWidth="11"
+                      stroke={colTheme.border}
+                      strokeWidth="12"
                       strokeLinecap="round"
                     />
 
-                    {/* Wider transparent hit-area for easier dragging */}
+                    {/* Wide transparent hit area for dragging bone */}
                     <line
                       x1={baseX}
                       y1={baseY}
                       x2={xEnd}
                       y2={yEnd}
                       stroke="transparent"
-                      strokeWidth="90"
+                      strokeWidth="110"
                       className="cursor-move"
                       onMouseDown={(e) => handleMouseDownCategory(e, catIndex)}
                     />
 
-                    {/* Category Name Label at the Tip */}
-                    <text
-                      x={xEnd + (isTop ? -40 : -40)}
-                      y={yEnd + (isTop ? -60 : 110)}
-                      fill={themeStyles.categoryText}
-                      fontSize={`${72 * fontScale}px`}
-                      fontWeight="900"
-                      letterSpacing="2px"
-                      className="cursor-pointer uppercase select-none hover:fill-sky-600 transition-colors"
+                    {/* Category Header Badge at the tip */}
+                    <g
+                      transform={`translate(${xEnd}, ${yEnd + (isTop ? -80 : 80)})`}
+                      className="cursor-pointer"
                       onDoubleClick={() =>
                         onOpenEditModal({
                           type: 'category',
@@ -487,46 +640,115 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                         })
                       }
                     >
-                      {cat.category}
-                    </text>
+                      <rect
+                        x="-160"
+                        y="-45"
+                        width="320"
+                        height="90"
+                        rx="16"
+                        fill={colTheme.header}
+                        filter="url(#shadow)"
+                      />
+                      <text
+                        x="0"
+                        y="0"
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fill="#ffffff"
+                        fontSize={`${44 * fontScale}px`}
+                        fontWeight="900"
+                        letterSpacing="2px"
+                        className="uppercase select-none problem-text"
+                      >
+                        {cat.category}
+                      </text>
+                    </g>
 
-                    {/* Cause Branches (Horizontal Sub-bones) */}
+                    {/* Anti-Collision Structured Cause Cards */}
                     {cat.causes.map((cause, causeIndex) => {
-                      const totalCauses = Math.max(cat.causes.length, 1);
-                      const stepRatio = 0.22 + (causeIndex / totalCauses) * 0.72;
-                      const cx = baseX + (xEnd - baseX) * stepRatio;
-                      const cy = baseY + (yEnd - baseY) * stepRatio;
-                      const subBoneLen = 520;
+                      // Guaranteed non-overlapping step positions
+                      let step = 0.50;
+                      if (causesCount === 2) {
+                        step = causeIndex === 0 ? 0.36 : 0.72;
+                      } else if (causesCount === 3) {
+                        step = [0.28, 0.52, 0.78][causeIndex];
+                      } else if (causesCount >= 4) {
+                        step = 0.22 + (causeIndex / (causesCount - 1)) * 0.68;
+                      }
 
-                      const causeWrapped = wrapTextLines(cause.cause, 32);
+                      // Coordinates on the bone
+                      const cx = baseX + (xEnd - baseX) * step;
+                      const cy = baseY + (yEnd - baseY) * step;
+
+                      // Card dimensions
+                      const cardWidth = 470;
+                      const titleLines = wrapTextLines(cause.cause, 28);
+                      const details = cause.details || [];
+
+                      // Calculate card height dynamically
+                      let cardHeight = 55 + titleLines.length * 30;
+                      if (details.length > 0) {
+                        cardHeight += 15; // gap
+                        details.forEach((det) => {
+                          const detLines = wrapTextLines(det, 32);
+                          cardHeight += detLines.length * 24 + 10;
+                        });
+                      }
+                      if (cause.actionPlan) {
+                        const planLines = wrapTextLines(`Rekomendasi: ${cause.actionPlan}`, 32);
+                        cardHeight += planLines.length * 22 + 20;
+                      }
+                      cardHeight = Math.max(120, cardHeight + 15);
+
+                      // Card X & Y positioning with strict spine clearance
+                      const connectorLen = 70;
+                      const cardX = cx + connectorLen;
+                      let cardY = cy - cardHeight / 2;
+
+                      // Ensure clearance from central spine (y=1800)
+                      if (isTop) {
+                        if (cardY + cardHeight > spineY - 80) {
+                          cardY = spineY - 80 - cardHeight;
+                        }
+                        if (cardY < 120) cardY = 120;
+                      } else {
+                        if (cardY < spineY + 80) {
+                          cardY = spineY + 80;
+                        }
+                        if (cardY + cardHeight > layout.viewBoxHeight - 120) {
+                          cardY = layout.viewBoxHeight - 120 - cardHeight;
+                        }
+                      }
 
                       return (
                         <g
                           key={cause.id || causeIndex}
-                          className="cause-sub-group"
+                          className="cause-card-group group"
                           onContextMenu={(e) =>
                             openContextMenu(e, 'cause', catIndex, causeIndex)
                           }
                         >
-                          {/* Horizontal Cause Line */}
+                          {/* Horizontal connector line from bone to card */}
                           <line
                             x1={cx}
                             y1={cy}
-                            x2={cx + subBoneLen}
-                            y2={cy}
-                            stroke={themeStyles.subBone}
-                            strokeWidth="6"
+                            x2={cardX}
+                            y2={cardY + cardHeight / 2}
+                            stroke={colTheme.border}
+                            strokeWidth="5"
                             strokeLinecap="round"
                           />
+                          <circle
+                            cx={cx}
+                            cy={cy}
+                            r="7"
+                            fill={colTheme.border}
+                          />
 
-                          {/* Cause Text */}
-                          <text
-                            x={cx + 15}
-                            y={cy - 24}
-                            fill="#0f172a"
-                            fontSize={`${44 * fontScale}px`}
-                            fontWeight="700"
-                            className="cursor-pointer select-none hover:fill-sky-700 transition-colors"
+                          {/* White Card Container */}
+                          <g
+                            transform={`translate(${cardX}, ${cardY})`}
+                            className="cursor-pointer"
                             onDoubleClick={() =>
                               onOpenEditModal({
                                 type: 'cause',
@@ -536,83 +758,143 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                               })
                             }
                           >
-                            {causeWrapped.map((cLine, cIdx) => (
-                              <tspan
-                                key={cIdx}
-                                x={cx + 15}
-                                dy={cIdx === 0 ? 0 : '48px'}
+                            {/* Card Background */}
+                            <rect
+                              x="0"
+                              y="0"
+                              width={cardWidth}
+                              height={cardHeight}
+                              rx="14"
+                              fill="#ffffff"
+                              stroke={colTheme.border}
+                              strokeWidth="3.5"
+                              filter="url(#shadow)"
+                              className="transition-all group-hover:stroke-sky-600"
+                            />
+
+                            {/* Top Accent Strip */}
+                            <path
+                              d={`M 0 14 Q 0 0 14 0 L ${cardWidth - 14} 0 Q ${cardWidth} 0 ${cardWidth} 14 L ${cardWidth} 28 L 0 28 Z`}
+                              fill={colTheme.border}
+                            />
+
+                            {/* Category Micro-tag */}
+                            <text
+                              x="16"
+                              y="18"
+                              fill="#ffffff"
+                              fontSize="13px"
+                              fontWeight="800"
+                              letterSpacing="1px"
+                              className="problem-text uppercase"
+                            >
+                              {cat.category} · Penyebab #{causeIndex + 1}
+                            </text>
+
+                            {/* Cause Title */}
+                            <g transform="translate(16, 52)">
+                              <text
+                                x="0"
+                                y="0"
+                                fill="#0f172a"
+                                fontSize={`${23 * fontScale}px`}
+                                fontWeight="800"
+                                className="problem-text"
                               >
-                                {cLine}
-                              </tspan>
-                            ))}
-                          </text>
+                                {titleLines.map((line, lIdx) => (
+                                  <tspan key={lIdx} x="0" dy={lIdx === 0 ? 0 : '28px'}>
+                                    {line}
+                                  </tspan>
+                                ))}
+                              </text>
+                            </g>
 
-                          {/* Details (Dashed Sub-Sub Bones) */}
-                          {cause.details?.map((detail, detIndex) => {
-                            const detailOffset =
-                              60 + causeWrapped.length * 48 + detIndex * 110;
-                            const dx = cx + 60;
-                            const dy = cy + (isTop ? detailOffset : -detailOffset);
+                            {/* Divider Line if details exist */}
+                            {details.length > 0 && (
+                              <line
+                                x1="16"
+                                y1={52 + titleLines.length * 28 + 6}
+                                x2={cardWidth - 16}
+                                y2={52 + titleLines.length * 28 + 6}
+                                stroke="#e2e8f0"
+                                strokeWidth="2"
+                              />
+                            )}
 
-                            const detailWrapped = wrapTextLines(detail, 36);
+                            {/* Bulleted Sub-cause Details */}
+                            <g transform={`translate(16, ${52 + titleLines.length * 28 + 24})`}>
+                              {details.map((det, dIdx) => {
+                                const detLines = wrapTextLines(det, 34);
+                                const prevOffsets = details
+                                  .slice(0, dIdx)
+                                  .reduce((acc, curr) => acc + wrapTextLines(curr, 34).length * 24 + 10, 0);
 
-                            return (
-                              <g
-                                key={detIndex}
-                                className="detail-leaf-group"
-                                onContextMenu={(e) =>
-                                  openContextMenu(
-                                    e,
-                                    'detail',
-                                    catIndex,
-                                    causeIndex,
-                                    detIndex
-                                  )
-                                }
-                              >
-                                {/* Dashed Detail Line */}
-                                <line
-                                  x1={dx}
-                                  y1={cy}
-                                  x2={dx + 25}
-                                  y2={dy - 10}
-                                  stroke="#64748b"
-                                  strokeWidth="3.5"
-                                  strokeDasharray="10,6"
-                                />
-
-                                {/* Detail Text */}
-                                <text
-                                  x={dx + 35}
-                                  y={dy}
-                                  fill="#334155"
-                                  fontSize={`${34 * fontScale}px`}
-                                  fontStyle="italic"
-                                  fontWeight="500"
-                                  className="cursor-pointer select-none hover:fill-sky-700 transition-colors"
-                                  onDoubleClick={() =>
-                                    onOpenEditModal({
-                                      type: 'detail',
-                                      catIndex,
-                                      causeIndex,
-                                      detailIndex: detIndex,
-                                      currentText: detail,
-                                    })
-                                  }
-                                >
-                                  {detailWrapped.map((dLine, dIdx) => (
-                                    <tspan
-                                      key={dIdx}
-                                      x={dx + 35}
-                                      dy={dIdx === 0 ? 0 : '38px'}
+                                return (
+                                  <g
+                                    key={dIdx}
+                                    transform={`translate(0, ${prevOffsets})`}
+                                    onContextMenu={(e) =>
+                                      openContextMenu(e, 'detail', catIndex, causeIndex, dIdx)
+                                    }
+                                    onDoubleClick={(e) => {
+                                      e.stopPropagation();
+                                      onOpenEditModal({
+                                        type: 'detail',
+                                        catIndex,
+                                        causeIndex,
+                                        detailIndex: dIdx,
+                                        currentText: det,
+                                      });
+                                    }}
+                                  >
+                                    <circle cx="4" cy="7" r="3.5" fill={colTheme.header} />
+                                    <text
+                                      x="14"
+                                      y="12"
+                                      fill="#334155"
+                                      fontSize={`${17 * fontScale}px`}
+                                      fontWeight="500"
+                                      className="problem-text"
                                     >
-                                      {dLine}
-                                    </tspan>
-                                  ))}
+                                      {detLines.map((dLine, dlIdx) => (
+                                        <tspan key={dlIdx} x="14" dy={dlIdx === 0 ? 0 : '22px'}>
+                                          {dLine}
+                                        </tspan>
+                                      ))}
+                                    </text>
+                                  </g>
+                                );
+                              })}
+                            </g>
+
+                            {/* Action Plan Recommendation Banner */}
+                            {cause.actionPlan && (
+                              <g transform={`translate(12, ${cardHeight - 42})`}>
+                                <rect
+                                  x="0"
+                                  y="0"
+                                  width={cardWidth - 24}
+                                  height="32"
+                                  rx="8"
+                                  fill="#ecfdf5"
+                                  stroke="#a7f3d0"
+                                  strokeWidth="1.5"
+                                />
+                                <text
+                                  x="10"
+                                  y="20"
+                                  fill="#065f46"
+                                  fontSize={`${14 * fontScale}px`}
+                                  fontWeight="700"
+                                  className="problem-text"
+                                >
+                                  {cause.actionPlan.length > 44
+                                    ? `Action: ${cause.actionPlan.substring(0, 42)}...`
+                                    : `Action: ${cause.actionPlan}`}
                                 </text>
                               </g>
-                            );
-                          })}
+                            )}
+                          </g>
                         </g>
                       );
                     })}

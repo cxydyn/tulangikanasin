@@ -22,7 +22,7 @@ import {
 import { SampleIncident, SAMPLE_INCIDENTS } from './data/sampleIncidents';
 
 const DEFAULT_SETTINGS: FishboneSettings = {
-  categorySpacing: 900,
+  categorySpacing: 1200,
   headScale: 1.0,
   fontScale: 1.0,
   paperSize: 'A3',

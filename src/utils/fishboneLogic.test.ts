@@ -21,12 +21,12 @@ test('generateDefaultCategories returns standard 6M categories with alternating 
 });
 
 test('calculateDiagramLayout expands viewBox and spine width based on category count and spacing', () => {
-  const layout = calculateDiagramLayout(6, 900);
-  assert.equal(layout.startX, 500);
-  // startX (500) + 6 * 900 + 200 = 6100
-  assert.equal(layout.totalSpineWidth, 6100);
-  assert.ok(layout.viewBoxWidth >= 7100);
-  assert.equal(layout.spineY, 1750);
+  const layout = calculateDiagramLayout(6, 1200);
+  assert.equal(layout.startX, 600);
+  // startX (600) + 6 * 1200 + 400 = 8200
+  assert.equal(layout.totalSpineWidth, 8200);
+  assert.ok(layout.viewBoxWidth >= 9400);
+  assert.equal(layout.spineY, 1800);
 });
 
 test('wrapTextLines wraps strings without breaking words when within limit', () => {
