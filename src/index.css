@@ -1,0 +1,83 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+  
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* SVG Text styling to ensure high readability */
+.fishbone-svg text {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  paint-order: stroke fill;
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 6px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fishbone-svg .problem-text {
+  stroke: none !important;
+}
+
+/* Print Styles: A3 / A4 Landscape */
+@media print {
+  @page {
+    size: landscape;
+    margin: 8mm;
+  }
+
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Hide navigation, AI inputs, modal overlays, controls during print */
+  header,
+  .no-print,
+  .action-btn-container,
+  .context-menu-portal,
+  button,
+  textarea {
+    display: none !important;
+  }
+
+  .print-page-diagram {
+    page-break-after: always;
+    page-break-inside: avoid;
+    height: 96vh !important;
+    width: 100% !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .print-page-table {
+    page-break-before: always;
+    width: 100% !important;
+    margin-top: 0 !important;
+    padding: 10mm !important;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+}

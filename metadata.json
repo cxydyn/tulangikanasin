@@ -1,0 +1,6 @@
+{
+  "name": "Fishbone Diagram AI Pro",
+  "description": "Root Cause Analysis (Ishikawa 6M) Fishbone Generator and Action Plan Manager powered by Gemini AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

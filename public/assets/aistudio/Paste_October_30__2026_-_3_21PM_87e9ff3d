@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fishbone Diagram AI Generator Pro</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* --- CSS VARIABLES & RESET --- */
+        :root {
+            --primary: #005a8d;
+            --secondary: #00446b;
+            --accent: #f8f9fa;
+            --danger: #dc3545;
+            --success: #28a745;
+            --warning: #ffc107;
+            --info: #17a2b8;
+            --text-dark: #212529;
+            --menu-bg: #ffffff;
+            --menu-hover: #e9ecef;
+            
+            /* FONT SIZE DEFAULT */
+            --fs-problem: 50px;    
+            --fs-category: 70px;   
+            --fs-cause: 45px;       
+            --fs-detail: 35px;      
+            
+            /* STROKE WIDTH DEFAULT */
+            --stroke-spine: 12px;
+            --stroke-bone: 10px;
+            --stroke-sub: 6px;
+            --stroke-detail: 3px;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: var(--accent);
+            margin: 0;
+            padding: 10px;
+            height: 100vh;
+            overflow: hidden; 
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* --- UI COMPONENTS --- */
+        .header {
+            width: 98vw;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            background: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            z-index: 50;
+        }
+        
+        .title-group h3 { margin: 0; color: var(--primary); font-size: 22px; }
+        .subtitle { font-size: 13px; color: #666; font-weight: normal; }
+
+        .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+        
+        button {
+            padding: 8px 14px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 3px rgba(0,0,0,0.1);
+            display: flex; align-items: center; gap: 5px;
+        }
+        button:hover { background: var(--secondary); transform: translateY(-1px); }
+        button:disabled { background: #6c757d; cursor: not-allowed; opacity: 0.7; transform: none; }
+        
+        button.btn-save { background: var(--success); }
+        button.btn-load { background: var(--info); }
+        button.btn-print { background: #6f42c1; }
+        button.btn-settings { background: #fd7e14; }
+
+        .ai-panel {
+            width: 98vw;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.03);
+            box-sizing: border-box;
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
+            z-index: 40;
+            transition: height 0.3s;
+        }
+        
+        .ai-inputs { flex-grow: 1; }
+        .ai-inputs h3 { margin: 0 0 5px 0; color: var(--primary); font-size: 15px; }
+        
+        textarea {
+            width: 100%;
+            height: 50px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        textarea:focus { outline: 2px solid var(--primary); border-color: transparent; }
+
+        #btn-generate {
+            height: 50px;
+            background: var(--success);
+            font-size: 15px;
+            min-width: 160px;
+            margin-top: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        #btn-generate:hover { background: #218838; }
+
+        #diagram-wrapper {
+            width: 98vw;
+            height: calc(100vh - 250px);
+            border: 1px solid #ccc;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            cursor: grab;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            z-index: 10;
+        }
+        #diagram-wrapper:active { cursor: grabbing; }
+
+        /* --- SVG STYLES --- */
+        svg { width: 100%; height: 100%; }
+        
+        .spine { stroke: #212529; stroke-width: var(--stroke-spine); stroke-linecap: round; }
+        .bone { stroke: #495057; stroke-width: var(--stroke-bone); stroke-linecap: round; }
+        .sub-bone { stroke: #6c757d; stroke-width: var(--stroke-sub); }
+        .sub-sub-bone { stroke: #868e96; stroke-width: var(--stroke-detail); stroke-dasharray: 12,6; } 
+        
+        .hit-area { stroke: transparent; stroke-width: 120; cursor: move; }
+        .bone-group { cursor: context-menu; }
+        .bone-group:hover .bone { stroke: #005a8d; stroke-width: 16; transition: stroke 0.2s; }
+
+        .detail-group { cursor: context-menu; }
+        
+        #head-group { cursor: move; }
+        .head-shape { 
+            fill: var(--primary); 
+            stroke: none;
+            filter: drop-shadow(6px 6px 6px rgba(0,0,0,0.2)); 
+            transition: all 0.2s;
+        }
+        #head-group:hover .head-shape {
+            fill: var(--secondary);
+            stroke: rgba(255,255,255,0.5);
+            stroke-width: 4px;
+        }
+        
+        text { 
+            font-family: 'Segoe UI', 'Arial', sans-serif; 
+            cursor: pointer;
+            paint-order: stroke;
+            stroke: rgba(255,255,255,0.9);
+            stroke-width: 8px; 
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        text:hover { fill: var(--primary); }
+        
+        .cat-text { font-size: var(--fs-category); font-weight: 900; fill: var(--primary); text-transform: uppercase; letter-spacing: 2px; }
+        .cause-text { font-size: var(--fs-cause); fill: #000; font-weight: 700; }
+        .detail-text { font-size: var(--fs-detail); fill: #333; font-style: italic; }
+        
+        /* Text Kepala Ikan - Pointer events enabled agar bisa diklik kanan/geser */
+        .problem-text { 
+            fill: white; 
+            font-weight: bold; 
+            font-size: var(--fs-problem); 
+            text-anchor: middle; 
+            dominant-baseline: central; 
+            stroke: none; 
+        }
+        
+        .marker-red { fill: #dc3545 !important; font-weight: bold; }
+        .marker-blue { fill: #007bff !important; font-weight: bold; }
+        .marker-green { fill: #28a745 !important; font-weight: bold; }
+
+        body.delete-mode .hit-area { cursor: no-drop; }
+        body.delete-mode g:hover > .bone { stroke: var(--danger); stroke-width: 16; }
+
+        /* --- CONTEXT MENU --- */
+        #context-menu {
+            display: none;
+            position: absolute;
+            z-index: 1000;
+            width: 220px;
+            background-color: var(--menu-bg);
+            border-radius: 6px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            border: 1px solid #ddd;
+            overflow: hidden;
+            font-size: 14px;
+            padding: 5px 0;
+        }
+        
+        .menu-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #333;
+            transition: background 0.1s;
+        }
+        .menu-item:hover { background-color: var(--menu-hover); color: var(--primary); }
+        .menu-item i { width: 20px; text-align: center; color: #666; }
+        .menu-separator { height: 1px; background: #eee; margin: 4px 0; }
+        .menu-item.danger { color: #dc3545; }
+        .menu-item.danger:hover { background-color: #ffeaea; }
+
+        /* --- SETTINGS MODAL --- */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;
+        }
+        .modal-box {
+            background: white; padding: 25px; border-radius: 8px; width: 400px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .modal-header { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; }
+        .form-group select, .form-group input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+        #loader { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(255,255,255,0.95); z-index: 9999; 
+            justify-content: center; align-items: center; flex-direction: column; 
+            color: var(--primary); font-weight: bold; font-size: 1.1rem;
+        }
+        #loader svg { width: 80px !important; height: 80px !important; flex: none; }
+
+        /* --- PRINT STYLES --- */
+        @media print {
+            @page { size: A3 landscape; margin: 5mm; }
+            body { margin: 0; padding: 0; width: 100%; background: white; -webkit-print-color-adjust: exact; display: block; overflow: visible; height: auto; }
+            .header, .ai-panel, .controls, #loader, #context-menu, .modal-overlay { display: none !important; }
+            #diagram-wrapper { 
+                position: relative; top: 0; left: 0; width: 100% !important; height: 98vh !important; 
+                border: none; margin: 0; background: white !important; z-index: 1;
+                page-break-after: always; overflow: visible;
+            }
+            svg { width: 100%; height: 100%; object-fit: contain; display: block; }
+            
+            .action-plan-page {
+                display: block !important; page-break-before: always; padding: 20px 40px;
+                background: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                width: 100% !important; box-sizing: border-box; margin: 0;
+            }
+            .action-plan-page h2 { color: var(--primary); border-bottom: 2px solid var(--primary); padding-bottom: 10px; margin-bottom: 20px; }
+            .action-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 12px; }
+            .action-table th, .action-table td { border: 1px solid #333; padding: 8px; text-align: left; vertical-align: top; }
+            .action-table th { background-color: #ddd !important; color: black !important; font-weight: bold; }
+            .action-table tr:nth-child(even) { background-color: #f9f9f9 !important; }
+            .action-btn-container, .delete-row-btn, .insert-row-btn { display: none !important; }
+            .editable-cell { white-space: pre-wrap; }
+        }
+
+        /* SCREEN STYLES for Table */
+        .action-plan-page {
+            display: block; width: 98vw; background: white; padding: 20px; border-radius: 8px; border: 1px solid #ddd;
+            margin-top: 10px; margin-bottom: 50px; box-shadow: 0 3px 6px rgba(0,0,0,0.03); box-sizing: border-box; flex-shrink: 0; 
+        }
+        .action-plan-page h2 { color: var(--primary); border-bottom: 2px solid var(--primary); padding-bottom: 10px; margin-top: 0; font-size: 18px; }
+        .action-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; }
+        .action-table th, .action-table td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }
+        .action-table th { background-color: var(--secondary); color: white; font-weight: bold; }
+        .action-table tr:nth-child(even) { background-color: #f9f9f9; }
+        .editable-cell { outline: none; white-space: pre-wrap; }
+        .editable-cell:focus { background-color: #f0f8ff; }
+        .action-btn-container { text-align: right; margin-bottom: 30px; }
+        
+        .add-row-btn { padding: 8px 12px; background: var(--success); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; }
+        .add-row-btn:hover { background: #218838; }
+        
+        .delete-row-btn { color: var(--danger); cursor: pointer; font-size: 16px; border: none; background: none; padding: 5px; }
+        .delete-row-btn:hover { color: #c82333; }
+        .insert-row-btn { color: var(--primary); cursor: pointer; font-size: 16px; border: none; background: none; padding: 5px; margin-right: 5px; }
+        .insert-row-btn:hover { color: #00446b; }
+        
+        body { overflow-y: auto; height: auto; min-height: 100vh; }
+        #file-input { display: none; }
+    </style>
+</head>
+<body>
+
+    <input type="file" id="file-input" accept=".json" onchange="loadProjectFile(this)">
+
+    <div id="loader">
+        <svg viewBox="0 0 50 50">
+            <circle cx="25" cy="25" r="20" fill="none" stroke="#005a8d" stroke-width="5" stroke-dasharray="80" stroke-dashoffset="0">
+                <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/>
+            </circle>
+        </svg>
+        <div style="margin-top: 15px;">AI sedang bekerja...</div>
+    </div>
+
+    <div id="context-menu"></div>
+
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">Pengaturan Diagram</div>
+            <div class="form-group">
+                <label>Ukuran Kertas (Print)</label>
+                <select id="paper-size" onchange="updatePaperGuide()">
+                    <option value="A3">A3 Landscape (420 x 297 mm)</option>
+                    <option value="A4">A4 Landscape (297 x 210 mm)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Jarak Antar Tulang (Spacing)</label>
+                <input type="range" id="spacing-slider" min="600" max="1500" value="900" oninput="updateSpacingLabel(this.value)">
+                <div style="font-size:12px; color:#666; margin-top:2px;">Value: <span id="spacing-val">900</span>px</div>
+            </div>
+            <div class="form-group">
+                <label>Skala Ukuran Font</label>
+                <select id="font-scale" onchange="applyFontScale()">
+                    <option value="0.8">Kecil (80%)</option>
+                    <option value="1.0" selected>Normal (100%)</option>
+                    <option value="1.2">Besar (120%)</option>
+                    <option value="1.5">Raksasa (150%)</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button onclick="closeSettings()" style="background:#6c757d;">Batal</button>
+                <button onclick="saveSettings()">Simpan & Render Ulang</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="header">
+        <div class="title-group">
+            <h3>Fishbone AI <span class="subtitle">Pro Editor</span></h3>
+        </div>
+        <div class="controls">
+            <button class="btn-save" onclick="saveProject()"><i class="fas fa-save"></i> Simpan Proyek</button>
+            <button class="btn-load" onclick="document.getElementById('file-input').click()"><i class="fas fa-folder-open"></i> Buka Proyek</button>
+            <span style="border-right: 1px solid #ddd; margin: 0 5px;"></span>
+            <button onclick="zoom(1.1)"><i class="fas fa-search-plus"></i> In</button>
+            <button onclick="zoom(0.9)"><i class="fas fa-search-minus"></i> Out</button>
+            <button onclick="autoFitView()"><i class="fas fa-compress"></i> Fit</button>
+            <button class="btn-settings" onclick="openSettings()"><i class="fas fa-cog"></i> Layout</button>
+            <button onclick="window.print()" class="btn-print"><i class="fas fa-print"></i> PDF</button>
+        </div>
+    </div>
+
+    <div class="ai-panel">
+        <div class="ai-inputs">
+            <h3>Kronologi Insiden (Input untuk AI)</h3>
+            <textarea id="input-desc" placeholder="Ketik kronologi insiden di sini... AI akan membuat struktur tulang ikan secara otomatis."></textarea>
+        </div>
+        <button id="btn-generate" onclick="runAnalysis()">
+            <i class="fas fa-magic"></i> Generate Diagram
+        </button>
+    </div>
+
+    <div id="diagram-wrapper" oncontextmenu="return false;">
+        <svg id="main-diagram" viewBox="0 0 6000 3500" preserveAspectRatio="xMidYMid meet">
+            <g id="viewport">
+                <rect id="bg-rect" x="0" y="0" width="6000" height="3500" fill="white" />
+                <rect id="guide-rect" x="50" y="50" width="5900" height="3400" fill="none" stroke="#ddd" stroke-width="4" stroke-dasharray="40,20" />
+
+                <line class="spine" x1="100" y1="1750" x2="5200" y2="1750"></line>
+                
+                <g id="head-group" transform="translate(5200, 1750)" data-scale="1">
+                    <path d="M0,-200 L700,0 L0,200 L50,0 Z" class="head-shape" /> 
+                    <text class="problem-text" x="300" y="0" data-type="problem">Masalah</text>
+                </g>
+
+                <g id="bones-layer"></g>
+            </g>
+        </svg>
+    </div>
+
+    <div class="action-plan-page">
+        <h2>CORRECTIVE ACTION PLAN</h2>
+        <table class="action-table" id="corrective-table">
+            <thead>
+                <tr>
+                    <th style="width: 12%;">Category</th>
+                    <th style="width: 20%;">Cause</th>
+                    <th style="width: 25%;">Sub Cause (Detail)</th>
+                    <th>Action Plan</th>
+                    <th style="width: 12%;">PIC</th>
+                    <th style="width: 12%;">Due Date</th>
+                    <th style="width: 70px;"></th> 
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <div class="action-btn-container">
+            <button class="add-row-btn" onclick="addEmptyRow('corrective-table')"><i class="fas fa-plus"></i> Tambah Baris Manual</button>
+        </div>
+
+        <h2>PREVENTIVE ACTION PLAN</h2>
+        <table class="action-table" id="preventive-table">
+            <thead>
+                <tr>
+                    <th style="width: 12%;">Category</th>
+                    <th style="width: 20%;">Cause</th>
+                    <th style="width: 25%;">Sub Cause (Detail)</th>
+                    <th>Action Plan</th>
+                    <th style="width: 12%;">PIC</th>
+                    <th style="width: 12%;">Due Date</th>
+                    <th style="width: 70px;"></th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <div class="action-btn-container">
+            <button class="add-row-btn" onclick="addEmptyRow('preventive-table')"><i class="fas fa-plus"></i> Tambah Baris Manual</button>
+        </div>
+    </div>
+
+    <script>
+        // --- GLOBAL STATE ---
+        const wrapper = document.getElementById('diagram-wrapper');
+        const viewport = document.getElementById('viewport');
+        const bonesLayer = document.getElementById('bones-layer');
+        const contextMenu = document.getElementById('context-menu');
+        
+        let scale = 1.0;
+        let pX = 0, pY = 0;
+        let startPan = { x:0, y:0 };
+        
+        // INTERACTION MODES
+        let dragMode = 'none';
+        let dragTarget = null;
+        let dragStartMouse = {x:0, y:0};
+        let dragStartPos = {x:0, y:0};
+        let initialTextX = 0;
+        let initialTextY = 0;
+        let connectedLines = []; 
+
+        let contextTarget = null;
+        let contextParentGroup = null;
+        let importedReportActions = null;
+
+        let currentCategories = ['Machine', 'Method', 'Material', 'Measurement', 'Man', 'Environment'];
+        let categorySpacing = 900;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderSkeleton(currentCategories);
+            setTimeout(autoFitView, 300);
+            
+            // Add Global Listeners
+            document.addEventListener('click', (e) => {
+                if (!contextMenu.contains(e.target)) hideContextMenu();
+            });
+            window.addEventListener('mouseup', () => { 
+                dragMode = 'none'; dragTarget = null; connectedLines = []; wrapper.style.cursor = 'grab'; 
+            });
+            
+            // Pan Listener
+            wrapper.addEventListener('mousedown', (e) => {
+                // Only pan if clicking on empty space (wrapper, viewport, bg-rect)
+                if(e.target.id === 'diagram-wrapper' || e.target.id === 'viewport' || e.target.id === 'bg-rect' || e.target.tagName === 'svg') {
+                    dragMode = 'pan'; 
+                    startPan = { x: e.clientX - pX, y: e.clientY - pY }; 
+                    wrapper.style.cursor = 'grabbing';
+                }
+            });
+
+            // Mouse Move Listener (Central Logic)
+            wrapper.addEventListener('mousemove', handleMouseMove);
+
+            addEmptyRow('corrective-table');
+            addEmptyRow('preventive-table');
+        });
+
+        function handleMouseMove(e) {
+            if (dragMode === 'none') return;
+
+            const dx = (e.clientX - dragStartMouse.x) / scale;
+            const dy = (e.clientY - dragStartMouse.y) / scale;
+
+            if (dragMode === 'move-text' && dragTarget) {
+                const newX = initialTextX + dx;
+                const newY = initialTextY + dy;
+                dragTarget.setAttribute('x', newX);
+                dragTarget.setAttribute('y', newY);
+                
+                // Update tspans if any
+                const spans = dragTarget.querySelectorAll('tspan');
+                spans.forEach(span => span.setAttribute('x', newX));
+
+                // Update lines
+                connectedLines.forEach(line => {
+                    if (line.classList.contains('sub-sub-bone') || line.classList.contains('hit-area')) {
+                        line.setAttribute('x2', newX - 10); 
+                        line.setAttribute('y2', newY - 15);
+                    } else if (line.classList.contains('bone') || line.classList.contains('sub-bone')) {
+                        line.setAttribute('x2', newX); 
+                        line.setAttribute('y2', newY);
+                    }
+                });
+
+            } else if (dragMode === 'move-group' && dragTarget) {
+                const nx = dragStartPos.x + dx;
+                const ny = dragStartPos.y + dy;
+                
+                if (dragTarget.id === 'head-group') {
+                    const currentScale = parseFloat(dragTarget.getAttribute('data-scale') || "1");
+                    dragTarget.setAttribute('transform', `translate(${nx}, ${ny}) scale(${currentScale})`);
+                    
+                    // Move Spine End
+                    const spine = document.querySelector('.spine');
+                    if(spine) {
+                        spine.setAttribute('x2', nx);
+                        spine.setAttribute('y2', ny); 
+                    }
+                } else {
+                    dragTarget.setAttribute('transform', `translate(${nx}, ${ny})`);
+                }
+                
+                dragTarget.setAttribute('data-tx', nx);
+                dragTarget.setAttribute('data-ty', ny);
+
+            } else if (dragMode === 'pan') {
+                pX = e.clientX - startPan.x;
+                pY = e.clientY - startPan.y;
+                viewport.setAttribute('transform', `translate(${pX}, ${pY}) scale(${scale})`);
+            }
+        }
+
+        // --- DRAG STARTERS ---
+        function startTextDrag(e, textEl, lines) {
+            e.preventDefault(); e.stopPropagation(); 
+            if(e.button === 2) return; 
+            dragMode = 'move-text'; dragTarget = textEl; connectedLines = lines;
+            dragStartMouse = { x: e.clientX, y: e.clientY };
+            initialTextX = parseFloat(textEl.getAttribute('x')); 
+            initialTextY = parseFloat(textEl.getAttribute('y'));
+            wrapper.style.cursor = 'all-scroll';
+        }
+
+        function startGroupDrag(e, groupEl) {
+            e.preventDefault(); e.stopPropagation(); 
+            if(e.button === 2) return;
+            dragMode = 'move-group'; dragTarget = groupEl;
+            dragStartMouse = { x: e.clientX, y: e.clientY };
+            // Ensure 0 fallback
+            const tx = parseFloat(groupEl.getAttribute('data-tx')) || 0;
+            const ty = parseFloat(groupEl.getAttribute('data-ty')) || 0;
+            dragStartPos = { x: tx, y: ty };
+            wrapper.style.cursor = 'move';
+        }
+
+        // --- RENDER SKELETON ---
+        function renderSkeleton(cats) {
+            if (!bonesLayer) return;
+            bonesLayer.innerHTML = '';
+            const startX = 500;
+            
+            cats.forEach((cat, i) => {
+                const isTop = i % 2 === 0;
+                const x = startX + (i * categorySpacing);
+                createBoneGroup(cat, [], x, isTop);
+            });
+
+            const totalWidth = startX + (cats.length * categorySpacing) + 200;
+            const spine = document.querySelector('.spine');
+            if(spine) spine.setAttribute('x2', totalWidth);
+            
+            const headGroup = document.getElementById('head-group');
+            const headY = 1750;
+            
+            // Set initial transforms properly so dragging works
+            headGroup.setAttribute('transform', `translate(${totalWidth}, ${headY}) scale(1)`);
+            headGroup.setAttribute('data-tx', totalWidth);
+            headGroup.setAttribute('data-ty', headY);
+            headGroup.setAttribute('data-scale', "1");
+
+            // Expand ViewBox automatically
+            const requiredWidth = totalWidth + 1000;
+            const newViewBox = `0 0 ${Math.max(6000, requiredWidth)} 3500`;
+            document.getElementById('main-diagram').setAttribute('viewBox', newViewBox);
+            document.getElementById('bg-rect').setAttribute('width', Math.max(6000, requiredWidth));
+            document.getElementById('guide-rect').setAttribute('width', Math.max(5900, requiredWidth - 100));
+
+            // Attach listeners to Head
+            const headShape = headGroup.querySelector('.head-shape'); 
+            const headText = headGroup.querySelector('.problem-text');
+
+            if(headShape) {
+                headShape.oncontextmenu = (e) => showContextMenu(e, 'problem', headShape, headGroup);
+                headShape.onmousedown = (e) => startGroupDrag(e, headGroup);
+            }
+            if(headText) {
+                headText.oncontextmenu = (e) => showContextMenu(e, 'problem', headText, headGroup);
+                headText.onmousedown = (e) => startGroupDrag(e, headGroup); 
+            }
+        }
+
+        // --- SVG CREATION HELPERS (Now definitely included) ---
+        function createSVGElement(tag, attrs) {
+            const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+            for (let k in attrs) el.setAttribute(k, attrs[k]);
+            return el;
+        }
+
+        function createBoneGroup(name, causes, xPos, isTop) {
+            const g = createSVGElement('g', { class: 'bone-group', transform: 'translate(0,0)', 'data-tx':0, 'data-ty':0 });
+            
+            const yBase = 1750;
+            const len = 1300;
+            const rad = (isTop ? -60 : 60) * Math.PI / 180;
+            const xEnd = xPos + (len * Math.cos(rad));
+            const yEnd = yBase + (len * Math.sin(rad));
+
+            const bone = createSVGElement('line', { x1:xPos, y1:yBase, x2:xEnd, y2:yEnd, class:'bone' });
+            const hit = createSVGElement('line', { x1:xPos, y1:yBase, x2:xEnd, y2:yEnd, class:'hit-area' });
+            
+            const text = createSVGElement('text', { 
+                x: xEnd + (isTop ? -60 : -60), 
+                y: yEnd + (isTop ? -50 : 100), 
+                class: 'cat-text' 
+            });
+            text.textContent = name;
+
+            hit.oncontextmenu = (e) => showContextMenu(e, 'bone-group', hit, g);
+            text.oncontextmenu = (e) => showContextMenu(e, 'category', text, g);
+            
+            hit.onmousedown = (e) => startGroupDrag(e, g);
+            text.onmousedown = (e) => startTextDrag(e, text, [bone, hit]);
+
+            g.append(bone, hit, text);
+            bonesLayer.appendChild(g);
+
+            if(causes && causes.length) {
+                causes.forEach((c, i) => {
+                    const step = 0.25 + ((i / Math.max(causes.length, 1)) * 0.7);
+                    const cx = xPos + ((xEnd - xPos) * step);
+                    const cy = yBase + ((yEnd - yBase) * step);
+                    createSubBone(g, c, cx, cy);
+                });
+            }
+        }
+
+        function createSubBone(parentG, data, startX, startY) {
+            const label = typeof data === 'string' ? data : data.cause;
+            const details = data.details || [];
+            
+            const subG = createSVGElement('g', { class: 'cause-group', transform: 'translate(0,0)', 'data-tx':0, 'data-ty':0 });
+            
+            const len = 500;
+            const line = createSVGElement('line', { x1:startX, y1:startY, x2:startX+len, y2:startY, class:'sub-bone' });
+            const hit = createSVGElement('line', { x1:startX, y1:startY, x2:startX+len, y2:startY, class:'hit-area' });
+            
+            const text = createSVGElement('text', { x:startX+10, y:startY-20, class:'cause-text' });
+            text.textContent = label;
+
+            hit.oncontextmenu = (e) => showContextMenu(e, 'cause-group', hit, subG);
+            text.oncontextmenu = (e) => showContextMenu(e, 'cause', text, subG);
+            
+            hit.onmousedown = (e) => startGroupDrag(e, subG);
+            text.onmousedown = (e) => startTextDrag(e, text, [line, hit]);
+
+            subG.append(line, hit, text);
+            parentG.appendChild(subG);
+
+            const lines = wrapText(text, 600);
+            
+            if(details.length) {
+                let yOffset = 60 + (lines * 50);
+                details.forEach((det, i) => {
+                    const dx = startX + 50;
+                    const dy = startY + yOffset;
+                    createDetail(subG, det, dx, dy, startY);
+                    
+                    const dLines = Math.ceil(det.length / 50); 
+                    yOffset += 40 + (dLines * 40);
+                });
+            }
+        }
+
+        function createDetail(parentG, textContent, dx, dy, startY = null) {
+            if (startY === null) startY = dy - 100;
+
+            const detailG = createSVGElement('g', { class: 'detail-group', transform: 'translate(0,0)', 'data-tx':0, 'data-ty':0 });
+
+            const dText = createSVGElement('text', { x:dx+30, y:dy, class:'detail-text' });
+            dText.textContent = textContent;
+            
+            const dLine = createSVGElement('line', { x1:dx, y1:startY, x2:dx+20, y2:dy-15, class:'sub-sub-bone' });
+            const dHit = createSVGElement('line', { x1:dx, y1:startY, x2:dx+20, y2:dy-15, class:'hit-area', style: 'stroke-width: 40px;' });
+
+            dText.oncontextmenu = (e) => showContextMenu(e, 'detail', dText, detailG);
+            dHit.oncontextmenu = (e) => showContextMenu(e, 'detail-group', dHit, detailG);
+
+            dHit.onmousedown = (e) => startGroupDrag(e, detailG);
+            dText.onmousedown = (e) => startTextDrag(e, dText, [dLine, dHit]);
+
+            detailG.append(dLine, dHit, dText);
+            parentG.appendChild(detailG);
+            
+            wrapText(dText, 550);
+        }
+
+        // --- CONTEXT MENU & ACTIONS ---
+        function showContextMenu(e, type, element, group) {
+            e.preventDefault(); e.stopPropagation();
+            contextTarget = element; contextParentGroup = group;
+            let menuHTML = '';
+            
+            if (type === 'problem') {
+                menuHTML += `<div class="menu-item" onclick="handleMenuAction('edit')"><i class="fas fa-pen"></i> Edit Teks</div>`;
+                menuHTML += `<div class="menu-item" onclick="handleMenuAction('font-up')"><i class="fas fa-plus"></i> Font Besar</div>`;
+                menuHTML += `<div class="menu-item" onclick="handleMenuAction('font-down')"><i class="fas fa-minus"></i> Font Kecil</div>`;
+                menuHTML += `<div class="menu-separator"></div>`;
+                menuHTML += `<div class="menu-item" onclick="handleMenuAction('head-scale-up')"><i class="fas fa-expand-alt"></i> Perbesar Kepala</div>`;
+                menuHTML += `<div class="menu-item" onclick="handleMenuAction('head-scale-down')"><i class="fas fa-compress-alt"></i> Perkecil Kepala</div>`;
+            } else {
+                menuHTML += `<div class="menu-item" onclick="handleMenuAction('edit')"><i class="fas fa-pen"></i> Edit Teks</div>`;
+                menuHTML += `<div class="menu-item" onclick="handleMenuAction('font-up')"><i class="fas fa-plus"></i> Font Besar</div>`;
+                menuHTML += `<div class="menu-item" onclick="handleMenuAction('font-down')"><i class="fas fa-minus"></i> Font Kecil</div>`;
+                menuHTML += `<div class="menu-separator"></div>`;
+                if (type === 'bone-group') menuHTML += `<div class="menu-item" onclick="handleMenuAction('add-cause')"><i class="fas fa-plus-circle"></i> Tambah Penyebab</div>`;
+                else if (type === 'cause-group') menuHTML += `<div class="menu-item" onclick="handleMenuAction('add-detail')"><i class="fas fa-list-ul"></i> Tambah Detail</div>`;
+                menuHTML += `<div class="menu-separator"></div>`;
+                menuHTML += `<div class="menu-item danger" onclick="handleMenuAction('delete')"><i class="fas fa-trash"></i> Hapus</div>`;
+            }
+            contextMenu.innerHTML = menuHTML;
+            contextMenu.style.display = 'block';
+            let menuX = e.clientX; let menuY = e.clientY;
+            const menuRect = contextMenu.getBoundingClientRect();
+            if (menuX + menuRect.width > window.innerWidth) menuX -= menuRect.width;
+            if (menuY + menuRect.height > window.innerHeight) menuY -= menuRect.height;
+            contextMenu.style.left = `${menuX}px`; contextMenu.style.top = `${menuY}px`;
+        }
+
+        function handleMenuAction(action) {
+            if (!contextTarget) return;
+            const grp = contextParentGroup;
+            let textEl = contextTarget.classList.contains('hit-area') || contextTarget.classList.contains('head-shape') ? grp.querySelector('text') : contextTarget;
+
+            switch(action) {
+                case 'head-scale-up': updateHeadScale(grp, 0.1); break;
+                case 'head-scale-down': updateHeadScale(grp, -0.1); break;
+                case 'edit':
+                    const currentTxt = textEl.textContent;
+                    const newTxt = prompt("Edit Teks:", currentTxt);
+                    if (newTxt !== null) {
+                        textEl.textContent = newTxt;
+                        let maxWidth = 700;
+                        if(textEl.classList.contains('detail-text')) maxWidth = 550;
+                        wrapText(textEl, maxWidth);
+                    }
+                    break;
+                case 'font-up': changeFontSize(textEl, 1.2); break;
+                case 'font-down': changeFontSize(textEl, 0.8); break;
+                case 'add-cause':
+                    const bbox = grp.getBBox();
+                    createSubBone(grp, "Penyebab Baru", bbox.x + 100, bbox.y + 100);
+                    break;
+                case 'add-detail':
+                    const subText = grp.querySelector('.cause-text');
+                    let sx = 0, sy = 0;
+                    if(subText) { sx = parseFloat(subText.getAttribute('x')); sy = parseFloat(subText.getAttribute('y')) + 100; }
+                    createDetail(grp, "Detail Baru", sx, sy);
+                    break;
+                case 'delete':
+                    if(confirm("Hapus item ini?")) {
+                        if(grp.classList.contains('detail-group') || grp.classList.contains('cause-group') || grp.classList.contains('bone-group')) grp.remove();
+                        else contextTarget.remove();
+                    }
+                    break;
+            }
+            hideContextMenu();
+        }
+
+        // --- FILE HANDLING (UPDATED) ---
+        function loadProjectFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    // Deteksi Format: Laporan Insiden vs Save File
+                    if (data.executiveSummary && data.incidentDetails) {
+                        loadIncidentReport(data);
+                    } else {
+                        applyProjectData(data);
+                    }
+                } catch (err) {
+                    alert("Gagal membaca file. Format JSON tidak valid.");
+                    console.error(err);
+                }
+            };
+            reader.readAsText(file);
+            input.value = ''; 
+        }
+
+        function loadIncidentReport(data) {
+            // 1. Ekstrak Masalah
+            if (data.executiveSummary && data.executiveSummary.incidentTitle) {
+                document.querySelector('.problem-text').textContent = data.executiveSummary.incidentTitle;
+                wrapText(document.querySelector('.problem-text'), 700);
+            }
+
+            // 2. Ekstrak Kronologi untuk AI
+            let fullChronology = "";
+            if (data.executiveSummary.narrative) fullChronology += "Narrative:\n" + data.executiveSummary.narrative + "\n\n";
+            // Include Conclusion as per thought process
+            if (data.executiveSummary.conclusion) fullChronology += "Conclusion:\n" + data.executiveSummary.conclusion + "\n\n";
+            if (data.sequenceOfEvents) {
+                fullChronology += "Sequence of Events:\n";
+                data.sequenceOfEvents.forEach(evt => fullChronology += `- [${evt.time}] ${evt.activity} (${evt.remarks})\n`);
+            }
+            // Include Root Causes Hint
+            if (data.rootCauses) {
+                const indicatedCauses = Object.keys(data.rootCauses).filter(k => data.rootCauses[k] === true).map(k => k.replace('is', '')).join(', ');
+                if (indicatedCauses) {
+                    fullChronology += "\nRoot Cause Categories Indicated: " + indicatedCauses;
+                }
+            }
+
+            document.getElementById('input-desc').value = fullChronology;
+
+            // 3. Simpan Action Plan untuk nanti
+            if (data.actionPlan) importedReportActions = data.actionPlan;
+
+            // 4. Jalankan AI
+            alert("Laporan Insiden terdeteksi! Memulai analisis otomatis...");
+            runAnalysis();
+        }
+
+        // --- COMMON UTILS ---
+        function saveProject() {
+            const headGroup = document.getElementById('head-group');
+            const projectData = {
+                timestamp: new Date().toISOString(),
+                chronology: document.getElementById('input-desc').value,
+                problem: document.querySelector('.problem-text').textContent,
+                analysis: collectAnalysisData(), // Helper func
+                correctivePlan: getTableData('corrective-table'),
+                preventivePlan: getTableData('preventive-table'),
+                settings: { categorySpacing: categorySpacing, headScale: headGroup.getAttribute('data-scale') || "1" }
+            };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(projectData, null, 2));
+            const dlAnchor = document.createElement('a');
+            dlAnchor.setAttribute("href", dataStr);
+            dlAnchor.setAttribute("download", "Fishbone_Project.json");
+            document.body.appendChild(dlAnchor); dlAnchor.click(); dlAnchor.remove();
+        }
+
+        function collectAnalysisData() {
+            const data = [];
+            document.querySelectorAll('.bone-group').forEach(bone => {
+                const category = bone.querySelector('.cat-text').textContent;
+                const causes = [];
+                bone.querySelectorAll('.cause-group').forEach(causeG => {
+                    const details = [];
+                    causeG.querySelectorAll('.detail-group').forEach(detG => details.push(detG.querySelector('.detail-text').textContent));
+                    causes.push({ cause: causeG.querySelector('.cause-text').textContent, details: details });
+                });
+                data.push({ category: category, causes: causes });
+            });
+            return data;
+        }
+
+        function applyProjectData(data) {
+            if(data.chronology) document.getElementById('input-desc').value = data.chronology;
+            if(data.settings) {
+                categorySpacing = data.settings.categorySpacing || 900;
+                // Apply head scale manually after render
+            }
+            if(data.problem) {
+                document.querySelector('.problem-text').textContent = data.problem;
+                wrapText(document.querySelector('.problem-text'), 700);
+            }
+            if(data.analysis) {
+                currentCategories = data.analysis.map(c => c.category);
+                bonesLayer.innerHTML = '';
+                const startX = 500;
+                data.analysis.forEach((catData, index) => {
+                    const x = startX + (index * categorySpacing);
+                    const isTop = index % 2 === 0;
+                    createBoneGroup(catData.category, catData.causes, x, isTop);
+                });
+                // Recalculate layout
+                const totalWidth = startX + (data.analysis.length * categorySpacing) + 200;
+                const headGroup = document.getElementById('head-group');
+                const headScale = data.settings?.headScale || "1";
+                headGroup.setAttribute('transform', `translate(${totalWidth}, 1750) scale(${headScale})`);
+                headGroup.setAttribute('data-tx', totalWidth);
+                headGroup.setAttribute('data-ty', 1750);
+                headGroup.setAttribute('data-scale', headScale);
+                document.querySelector('.spine').setAttribute('x2', totalWidth);
+                
+                // Expand viewbox
+                const reqW = totalWidth + 1000;
+                document.getElementById('main-diagram').setAttribute('viewBox', `0 0 ${Math.max(6000, reqW)} 3500`);
+                document.getElementById('bg-rect').setAttribute('width', Math.max(6000, reqW));
+            }
+            restoreTable('corrective-table', data.correctivePlan);
+            restoreTable('preventive-table', data.preventivePlan);
+            setTimeout(autoFitView, 300);
+            alert("Proyek berhasil dimuat!");
+        }
+
+        // --- TABLE UTILS ---
+        function addEmptyRow(tableId) { addRowData(tableId, "", "", "", "", "", ""); }
+        function addRowData(tableId, cat, cause, subCause, action, pic, date, index = -1) {
+            const tbody = document.getElementById(tableId).getElementsByTagName('tbody')[0];
+            const newRow = tbody.insertRow(index);
+            const createCell = (text) => { const c = newRow.insertCell(); c.contentEditable = "true"; c.className = "editable-cell"; c.textContent = text || ""; return c; };
+            createCell(cat); createCell(cause); createCell(subCause); createCell(action); createCell(pic); createCell(date);
+            const actCell = newRow.insertCell(); actCell.style.textAlign = "center"; actCell.style.whiteSpace = "nowrap";
+            actCell.innerHTML = `<button class="insert-row-btn" onclick="insertRowAfter(this)"><i class="fas fa-plus"></i></button> <button class="delete-row-btn" onclick="deleteRow(this)"><i class="fas fa-trash-alt"></i></button>`;
+        }
+        function insertRowAfter(btn) { const row = btn.closest('tr'); const tbody = row.parentNode; const idx = Array.from(tbody.children).indexOf(row); addRowData(btn.closest('table').id, "", "", "", "", "", "", idx + 1); }
+        function deleteRow(btn) { btn.closest('tr').remove(); }
+        function getTableData(tableId) {
+            const data = [];
+            document.querySelectorAll(`#${tableId} tbody tr`).forEach(row => {
+                const cells = row.querySelectorAll('.editable-cell');
+                if(cells.length >= 6) data.push({ category: cells[0].textContent, cause: cells[1].textContent, subCause: cells[2].textContent, action: cells[3].textContent, pic: cells[4].textContent, dueDate: cells[5].textContent });
+            });
+            return data;
+        }
+        function restoreTable(tableId, data) {
+            document.querySelector(`#${tableId} tbody`).innerHTML = '';
+            if(data && data.length) data.forEach(r => addRowData(tableId, r.category, r.cause, r.subCause, r.action, r.pic, r.dueDate));
+            else addEmptyRow(tableId);
+        }
+
+        // --- HELPERS ---
+        function hideContextMenu() { contextMenu.style.display = 'none'; contextTarget = null; }
+        function updateHeadScale(headGroup, delta) {
+            let s = parseFloat(headGroup.getAttribute('data-scale') || "1") + delta;
+            if(s < 0.2) s = 0.2;
+            headGroup.setAttribute('data-scale', s.toFixed(2));
+            const tx = parseFloat(headGroup.getAttribute('data-tx')), ty = parseFloat(headGroup.getAttribute('data-ty'));
+            headGroup.setAttribute('transform', `translate(${tx}, ${ty}) scale(${s})`);
+        }
+        function wrapText(textEl, maxWidth) {
+            if (!textEl.parentNode) return 1;
+            const words = textEl.textContent.split(' '); textEl.textContent = '';
+            const x = textEl.getAttribute("x");
+            let tspan = createSVGElement('tspan', { x:x, dy:0 }); textEl.appendChild(tspan);
+            let line = []; let count = 0;
+            for(let word of words) {
+                line.push(word); tspan.textContent = line.join(' ');
+                if(tspan.getComputedTextLength() > maxWidth && line.length > 1) {
+                    line.pop(); tspan.textContent = line.join(' '); line = [word];
+                    tspan = createSVGElement('tspan', { x:x, dy:'1.2em' }); tspan.textContent = word; textEl.appendChild(tspan); count++;
+                }
+            }
+            return count + 1;
+        }
+        function changeFontSize(el, m) { el.style.fontSize = (parseFloat(window.getComputedStyle(el).fontSize) * m) + 'px'; }
+        function autoFitView() { scale = 1.0; pX = 0; pY = 0; viewport.setAttribute('transform', `translate(0, 0) scale(1)`); }
+        function zoom(f) { scale *= f; viewport.setAttribute('transform', `translate(${pX}, ${pY}) scale(${scale})`); }
+        function openSettings() { document.getElementById('settings-modal').style.display = 'flex'; }
+        function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
+        function updateSpacingLabel(v) { document.getElementById('spacing-val').innerText = v; }
+        function saveSettings() { categorySpacing = parseInt(document.getElementById('spacing-slider').value); renderSkeleton(currentCategories); closeSettings(); setTimeout(autoFitView, 200); }
+        function runAnalysis() {
+            const desc = document.getElementById('input-desc').value; if(!desc.trim()) return alert("Isi kronologi dulu!");
+            document.getElementById('loader').style.display = 'flex';
+            google.script.run.withSuccessHandler(handleSuccess).withFailureHandler(handleError).getAiAnalysis(desc);
+        }
+        function handleError(e) { document.getElementById('loader').style.display = 'none'; alert("Error: " + e.message); }
+        function handleSuccess(response) {
+            document.getElementById('loader').style.display = 'none';
+            try {
+                const data = JSON.parse(response.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim());
+                if (data.error) throw new Error(data.error);
+                document.querySelector('.problem-text').textContent = data.problem || "Masalah";
+                wrapText(document.querySelector('.problem-text'), 700);
+                
+                // Logic render sama dengan applyProjectData tapi untuk data baru
+                if(data.analysis) {
+                    currentCategories = data.analysis.map(c => c.category);
+                    bonesLayer.innerHTML = '';
+                    const startX = 500;
+                    data.analysis.forEach((catData, index) => {
+                        const x = startX + (index * categorySpacing);
+                        const isTop = index % 2 === 0;
+                        createBoneGroup(catData.category, catData.causes, x, isTop);
+                    });
+                    const totalWidth = startX + (data.analysis.length * categorySpacing) + 200;
+                    const headGroup = document.getElementById('head-group');
+                    headGroup.setAttribute('transform', `translate(${totalWidth}, 1750) scale(1)`);
+                    headGroup.setAttribute('data-tx', totalWidth);
+                    headGroup.setAttribute('data-ty', 1750);
+                    headGroup.setAttribute('data-scale', "1");
+                    document.querySelector('.spine').setAttribute('x2', totalWidth);
+                    const reqW = totalWidth + 1000;
+                    document.getElementById('main-diagram').setAttribute('viewBox', `0 0 ${Math.max(6000, reqW)} 3500`);
+                    document.getElementById('bg-rect').setAttribute('width', Math.max(6000, reqW));
+                    
+                    generateActionTables(data.analysis);
+                    
+                    // APPEND REPORT ACTIONS IF EXIST
+                    if (importedReportActions) {
+                        importedReportActions.forEach(act => {
+                            // CHANGE: Removed "Report" category, left it blank as requested
+                            addRowData('corrective-table', "", "", "", act.action, act.followUpBy, act.completionDate);
+                        });
+                        importedReportActions = null; // Clear
+                    }
+                }
+                setTimeout(autoFitView, 300);
+            } catch (e) { alert("Error parsing AI response: " + e.message); }
+        }
+
+        // --- GENERATE TABLES FUNCTION (MISSING PART ADDED) ---
+        function generateActionTables(analysisData) {
+            // 1. Bersihkan tabel lama
+            document.querySelector('#corrective-table tbody').innerHTML = '';
+            document.querySelector('#preventive-table tbody').innerHTML = '';
+
+            // 2. Loop data analisis untuk mengisi tabel
+            if (analysisData && Array.isArray(analysisData)) {
+                analysisData.forEach(catItem => {
+                    const category = catItem.category;
+                    if (catItem.causes && Array.isArray(catItem.causes)) {
+                        catItem.causes.forEach(causeItem => {
+                            // Ambil teks penyebab (Cause)
+                            const causeText = typeof causeItem === 'string' ? causeItem : causeItem.cause;
+                            
+                            // Ambil detail penyebab (Sub Cause)
+                            let subCauseText = "";
+                            if (causeItem.details && Array.isArray(causeItem.details) && causeItem.details.length > 0) {
+                                subCauseText = causeItem.details.map(d => "• " + d).join("\n");
+                            }
+
+                            // Ambil Rekomendasi Action Plan (dari AI)
+                            const actionPlanText = causeItem.action_plan || "";
+
+                            // Tambahkan ke Tabel Corrective & Preventive
+                            addRowData('corrective-table', category, causeText, subCauseText, actionPlanText, "", "");
+                            addRowData('preventive-table', category, causeText, subCauseText, actionPlanText, "", "");
+                        });
+                    }
+                });
+            }
+            
+            // Jika kosong, beri baris default
+            if(document.querySelector('#corrective-table tbody').rows.length === 0) addEmptyRow('corrective-table');
+            if(document.querySelector('#preventive-table tbody').rows.length === 0) addEmptyRow('preventive-table');
+        }
+    </script>
+</body>
+</html>
