@@ -133,14 +133,18 @@ export default function App() {
     try {
       let aiResponse: RawAiAnalysisResponse | null = null;
 
-      // First attempt: Call backend endpoint /api/analyze
+      // Auto-route to live backend API (supports local dev, Cloud Run, and GitHub Pages automatically)
+      const REMOTE_BACKEND = 'https://ais-pre-cmbnr6eefzyimfurvoqenc-363337859939.asia-southeast1.run.app';
+      const isGitHubPages = typeof window !== 'undefined' && window.location.hostname.includes('github.io');
+      const apiUrl = isGitHubPages ? `${REMOTE_BACKEND}/api/analyze` : '/api/analyze';
+
       try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (settings.customApiKey?.trim()) {
           headers['x-gemini-api-key'] = settings.customApiKey.trim();
         }
 
-        const response = await fetch('/api/analyze', {
+        const response = await fetch(apiUrl, {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -149,7 +153,7 @@ export default function App() {
           }),
         });
 
-        // If backend exists and responds
+        // If backend responds successfully
         if (response.ok) {
           const data = await response.json();
           if (!data.error) {
@@ -160,18 +164,17 @@ export default function App() {
           throw new Error(errData.error || `HTTP error ${response.status}`);
         }
       } catch (fetchErr: unknown) {
-        // If not a 404 fallback situation, or if fetch failed completely
-        console.warn('Backend /api/analyze not available or failed, checking direct client fallback...', fetchErr);
+        console.warn('Primary backend endpoint unreachable, trying client fallback...', fetchErr);
       }
 
-      // If backend was 404 (static GitHub Pages hosting) or unavailable:
+      // If backend was unreachable and user provided their own key:
       if (!aiResponse) {
         if (settings.customApiKey?.trim()) {
           aiResponse = await analyzeIncidentDirectly(textToAnalyze, settings.customApiKey.trim());
         } else {
           setIsSettingsOpen(true);
           throw new Error(
-            'Mode GitHub Pages (Hosting Statis) Terdeteksi: Silakan masukkan API Key Gemini Anda pada menu Pengaturan (ikon Gear) untuk menjalankan analisis AI langsung dari peramban.'
+            'Server analisis sedang sibuk. Silakan coba kembali beberapa saat lagi, atau masukkan API Key Gemini Anda di menu Pengaturan.'
           );
         }
       }
