@@ -871,8 +871,8 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                       transform={`translate(${xEnd}, ${yEnd})`}
                       className="cursor-crosshair no-print group/handle"
                       onMouseDown={(e) => handleMouseDownBoneTip(e, catIndex, xEnd, yEnd)}
-                      title="Drag untuk mengubah sudut & panjang garis tulang ini"
                     >
+                      <title>Drag untuk mengubah sudut &amp; panjang garis tulang ini</title>
                       <circle
                         cx="0"
                         cy="0"
@@ -1055,7 +1055,6 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                               onMouseDown={(e) =>
                                 handleMouseDownCard(e, catIndex, causeIndex, cardX, cardY)
                               }
-                              title="Drag kartu ini untuk mengatur posisi bebas pada diagram (Double-click untuk reset posisi)"
                               onDoubleClick={(e) => {
                                 e.stopPropagation();
                                 const updated = [...categories];
@@ -1069,6 +1068,7 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                                 onUpdateCategories(updated);
                               }}
                             >
+                              <title>Drag kartu ini untuk mengatur posisi bebas pada diagram (Double-click untuk reset posisi)</title>
                               <path
                                 d={`M 0 14 Q 0 0 14 0 L ${cardWidth - 14} 0 Q ${cardWidth} 0 ${cardWidth} 14 L ${cardWidth} 28 L 0 28 Z`}
                                 fill={colTheme.border}
@@ -1233,7 +1233,6 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                               onMouseDown={(e) =>
                                 handleMouseDownCardResize(e, catIndex, causeIndex, cardWidth, cardHeight)
                               }
-                              title="Drag sudut ini untuk resize kartu (Double-click untuk reset ukuran)"
                               onDoubleClick={(e) => {
                                 e.stopPropagation();
                                 const updated = [...categories];
@@ -1247,6 +1246,7 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                                 onUpdateCategories(updated);
                               }}
                             >
+                              <title>Drag sudut ini untuk resize kartu (Double-click untuk reset ukuran)</title>
                               <rect x="0" y="0" width="26" height="26" fill="transparent" />
                               <line x1="8" y1="22" x2="22" y2="8" stroke={colTheme.border} strokeWidth="2.5" strokeLinecap="round" />
                               <line x1="15" y1="22" x2="22" y2="15" stroke={colTheme.border} strokeWidth="2.5" strokeLinecap="round" />

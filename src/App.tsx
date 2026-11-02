@@ -22,6 +22,7 @@ import {
   parseIncidentReport,
 } from './utils/fishboneLogic';
 import { SampleIncident, SAMPLE_INCIDENTS } from './data/sampleIncidents';
+import { analyzeIncidentDirectly } from './services/geminiClient';
 
 const DEFAULT_SETTINGS: FishboneSettings = {
   categorySpacing: 1200,
@@ -130,27 +131,50 @@ export default function App() {
     setErrorMessage(null);
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (settings.customApiKey?.trim()) {
-        headers['x-gemini-api-key'] = settings.customApiKey.trim();
+      let aiResponse: RawAiAnalysisResponse | null = null;
+
+      // First attempt: Call backend endpoint /api/analyze
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (settings.customApiKey?.trim()) {
+          headers['x-gemini-api-key'] = settings.customApiKey.trim();
+        }
+
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            description: textToAnalyze,
+            customApiKey: settings.customApiKey?.trim(),
+          }),
+        });
+
+        // If backend exists and responds
+        if (response.ok) {
+          const data = await response.json();
+          if (!data.error) {
+            aiResponse = data as RawAiAnalysisResponse;
+          }
+        } else if (response.status !== 404) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP error ${response.status}`);
+        }
+      } catch (fetchErr: unknown) {
+        // If not a 404 fallback situation, or if fetch failed completely
+        console.warn('Backend /api/analyze not available or failed, checking direct client fallback...', fetchErr);
       }
 
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          description: textToAnalyze,
-          customApiKey: settings.customApiKey?.trim(),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || data.error) {
-        throw new Error(data.error || `HTTP error ${response.status}`);
+      // If backend was 404 (static GitHub Pages hosting) or unavailable:
+      if (!aiResponse) {
+        if (settings.customApiKey?.trim()) {
+          aiResponse = await analyzeIncidentDirectly(textToAnalyze, settings.customApiKey.trim());
+        } else {
+          setIsSettingsOpen(true);
+          throw new Error(
+            'Mode GitHub Pages (Hosting Statis) Terdeteksi: Silakan masukkan API Key Gemini Anda pada menu Pengaturan (ikon Gear) untuk menjalankan analisis AI langsung dari peramban.'
+          );
+        }
       }
-
-      const aiResponse = data as RawAiAnalysisResponse;
 
       // 1. Set Problem & Conclusion
       if (aiResponse.problem) {
