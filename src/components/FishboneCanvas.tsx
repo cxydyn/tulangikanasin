@@ -11,6 +11,7 @@ import {
   Sparkles,
   ChevronRight,
   ShieldAlert,
+  RotateCcw,
 } from 'lucide-react';
 import { FishboneCategory, FishboneSettings } from '../types/fishbone';
 import { calculateDiagramLayout, wrapTextLines } from '../utils/fishboneLogic';
@@ -29,6 +30,7 @@ interface FishboneCanvasProps {
     detailIndex?: number;
     currentText: string;
   }) => void;
+  onOpenEditCause: (catIndex: number, causeIndex: number) => void;
 }
 
 interface ContextMenuState {
@@ -132,6 +134,7 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
   settings,
   onUpdateSettings,
   onOpenEditModal,
+  onOpenEditCause,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -143,9 +146,19 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
   const startPanRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const dragInitialPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  // Ensure diagram resets to clean center before printing
+  useEffect(() => {
+    const handleBeforePrint = () => {
+      setScale(1.0);
+      setPan({ x: 0, y: 0 });
+    };
+    window.addEventListener('beforeprint', handleBeforePrint);
+    return () => window.removeEventListener('beforeprint', handleBeforePrint);
+  }, []);
+
   // Dragging elements
   const [draggingTarget, setDraggingTarget] = useState<{
-    type: 'head' | 'category' | 'cause';
+    type: 'head' | 'category' | 'bone-tip' | 'cause';
     catIndex?: number;
     causeIndex?: number;
   } | null>(null);
@@ -171,6 +184,18 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
   const handleAutoFit = useCallback(() => {
     setScale(1.0);
     setPan({ x: 0, y: 0 });
+  }, []);
+
+  // Reset pan and scale automatically when printing to PDF
+  useEffect(() => {
+    const handleBeforePrint = () => {
+      setPan({ x: 0, y: 0 });
+      setScale(1.0);
+    };
+    window.addEventListener('beforeprint', handleBeforePrint);
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+    };
   }, []);
 
   useEffect(() => {
@@ -208,7 +233,7 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
     dragInitialPosRef.current = { x: headX, y: spineY };
   };
 
-  // Dragging Category Mouse Down
+  // Dragging Category Bone Mouse Down (Move bone along spine)
   const handleMouseDownCategory = (e: React.MouseEvent, catIndex: number) => {
     e.stopPropagation();
     if (e.button !== 0) return;
@@ -218,6 +243,20 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
       x: categories[catIndex].customX || 0,
       y: categories[catIndex].customY || 0,
     };
+  };
+
+  // Dragging Bone Tip Mouse Down (Adjust angle & length)
+  const handleMouseDownBoneTip = (
+    e: React.MouseEvent,
+    catIndex: number,
+    currentEndX: number,
+    currentEndY: number
+  ) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    setDraggingTarget({ type: 'bone-tip', catIndex });
+    dragStartMouseRef.current = { x: e.clientX, y: e.clientY };
+    dragInitialPosRef.current = { x: currentEndX, y: currentEndY };
   };
 
   // Mouse Move listener
@@ -246,6 +285,28 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
             ...updated[idx],
             customX: dragInitialPosRef.current.x + dx,
             customY: dragInitialPosRef.current.y + dy,
+          };
+          onUpdateCategories(updated);
+        } else if (draggingTarget.type === 'bone-tip' && draggingTarget.catIndex !== undefined) {
+          const idx = draggingTarget.catIndex;
+          const cat = categories[idx];
+          const baseX = layout.startX + idx * categorySpacing + (cat.customX || 0);
+          const baseY = spineY + (cat.customY || 0);
+
+          const currentMouseX = dragInitialPosRef.current.x + dx;
+          const currentMouseY = dragInitialPosRef.current.y + dy;
+
+          const deltaX = currentMouseX - baseX;
+          const deltaY = currentMouseY - baseY;
+          const newLength = Math.max(900, Math.min(2200, Math.hypot(deltaX, deltaY)));
+          let deg = (Math.atan2(Math.abs(deltaY), deltaX) * 180) / Math.PI;
+          deg = Math.max(30, Math.min(80, deg));
+
+          const updated = [...categories];
+          updated[idx] = {
+            ...updated[idx],
+            customLength: Math.round(newLength),
+            customAngle: Math.round(deg),
           };
           onUpdateCategories(updated);
         }
@@ -386,6 +447,33 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
     onUpdateSettings({ fontScale: next });
   };
 
+  // Quick adjust bone angle
+  const handleAdjustAngle = (delta: number) => {
+    const current = settings.boneAngle || 55;
+    const next = Math.max(35, Math.min(75, current + delta));
+    onUpdateSettings({ boneAngle: next });
+  };
+
+  // Reset all custom bone positions and angles
+  const handleResetLines = () => {
+    const resetCats = categories.map((c) => ({
+      ...c,
+      customX: undefined,
+      customY: undefined,
+      customAngle: undefined,
+      customLength: undefined,
+    }));
+    onUpdateCategories(resetCats);
+    setHeadCustomX(null);
+    handleAutoFit();
+  };
+
+  const fontFamilyCss = {
+    sans: "'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+    serif: "'Georgia', 'Cambria', serif",
+    mono: "'JetBrains Mono', monospace",
+  }[settings.fontFamily || 'sans'];
+
   return (
     <div className="relative w-full bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden print-page-diagram">
       {/* Canvas Floating Toolbar */}
@@ -446,6 +534,32 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
 
         <div className="h-4 w-px bg-slate-200 mx-0.5" />
 
+        {/* Bone Angle Adjustment */}
+        <div className="flex items-center gap-1 px-1">
+          <span className="text-[11px] font-medium text-slate-500">Sudut:</span>
+          <button
+            type="button"
+            onClick={() => handleAdjustAngle(-5)}
+            title="Kurangi Kemiringan (-5°)"
+            className="px-1.5 py-0.5 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-sm font-bold text-xs cursor-pointer"
+          >
+            -
+          </button>
+          <span className="font-mono text-[11px] font-bold text-sky-900 w-9 text-center">
+            {settings.boneAngle || 55}°
+          </span>
+          <button
+            type="button"
+            onClick={() => handleAdjustAngle(5)}
+            title="Tambah Kemiringan (+5°)"
+            className="px-1.5 py-0.5 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-sm font-bold text-xs cursor-pointer"
+          >
+            +
+          </button>
+        </div>
+
+        <div className="h-4 w-px bg-slate-200 mx-0.5" />
+
         {/* Font Adjustment */}
         <div className="flex items-center gap-1 px-1">
           <span className="text-[11px] font-medium text-slate-500">Font:</span>
@@ -469,12 +583,25 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
             A+
           </button>
         </div>
+
+        <div className="h-4 w-px bg-slate-200 mx-0.5" />
+
+        {/* Reset Lines button */}
+        <button
+          type="button"
+          onClick={handleResetLines}
+          title="Reset Semua Posisi & Sudut Garis ke Default"
+          className="inline-flex items-center gap-1 px-2 py-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 rounded-md text-[11px] font-medium cursor-pointer transition-colors"
+        >
+          <RotateCcw className="w-3 h-3 text-slate-500" />
+          <span>Reset Garis</span>
+        </button>
       </div>
 
       {/* Guide Help Hint */}
       <div className="absolute bottom-3 left-4 z-20 text-[11px] text-slate-500 bg-white/90 backdrop-blur-xs px-3 py-1.5 rounded-md border border-slate-200 shadow-2xs pointer-events-none no-print flex items-center gap-2">
         <span className="w-2 h-2 rounded-full bg-sky-600 inline-block" />
-        <span>Struktur Anti-Collision: Setiap penyebab dikelompokkan dalam kartu terpisah yang rapi dan mudah dibaca</span>
+        <span>Tips Interaktif: Drag lingkaran di ujung tulang untuk mengubah sudut & panjang garis secara presisi. Klik kartu penyebab untuk edit langsung.</span>
       </div>
 
       {/* Main SVG Viewport */}
@@ -493,6 +620,12 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
           preserveAspectRatio="xMidYMid meet"
         >
           <defs>
+            <style>{`
+              @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap');
+              .fishbone-svg text, .fishbone-svg tspan {
+                font-family: ${fontFamilyCss} !important;
+              }
+            `}</style>
             <filter id="shadow" x="-5%" y="-5%" width="120%" height="120%">
               <feDropShadow dx="0" dy="6" stdDeviation="8" floodColor="#0f172a" floodOpacity="0.08" />
             </filter>
@@ -502,7 +635,7 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
           </defs>
 
           {/* Scalable & Pannable Viewport Group */}
-          <g transform={`translate(${pan.x}, ${pan.y}) scale(${scale})`}>
+          <g className="fishbone-viewport-group" transform={`translate(${pan.x}, ${pan.y}) scale(${scale})`}>
             {/* Background canvas guide rectangle */}
             <rect
               x="50"
@@ -590,9 +723,14 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                   (cat.customX || 0);
                 const baseY = spineY + (cat.customY || 0);
 
-                // Slanted 55-degree bone
-                const boneLength = 1500;
-                const angleRad = ((isTop ? -55 : 55) * Math.PI) / 180;
+                // Slanted bone with configurable angle & length
+                const defaultAngle = settings.boneAngle || 55;
+                const angle = cat.customAngle !== undefined ? cat.customAngle : defaultAngle;
+                const defaultLength = settings.boneLength || 1500;
+                const boneLength = cat.customLength !== undefined ? cat.customLength : defaultLength;
+                const strokeWidth = settings.lineWidth || 12;
+
+                const angleRad = ((isTop ? -angle : angle) * Math.PI) / 180;
                 const xEnd = baseX + boneLength * Math.cos(angleRad);
                 const yEnd = baseY + boneLength * Math.sin(angleRad);
 
@@ -612,7 +750,7 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                       x2={xEnd}
                       y2={yEnd}
                       stroke={colTheme.border}
-                      strokeWidth="12"
+                      strokeWidth={strokeWidth}
                       strokeLinecap="round"
                     />
 
@@ -627,6 +765,30 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                       className="cursor-move"
                       onMouseDown={(e) => handleMouseDownCategory(e, catIndex)}
                     />
+
+                    {/* Interactive Bone Tip Pin Handle (Drag to reshape line) */}
+                    <g
+                      transform={`translate(${xEnd}, ${yEnd})`}
+                      className="cursor-crosshair no-print group/handle"
+                      onMouseDown={(e) => handleMouseDownBoneTip(e, catIndex, xEnd, yEnd)}
+                    >
+                      <circle
+                        cx="0"
+                        cy="0"
+                        r="22"
+                        fill="#ffffff"
+                        stroke={colTheme.border}
+                        strokeWidth="4"
+                        filter="url(#shadow)"
+                        className="transition-transform group-hover/handle:scale-125"
+                      />
+                      <circle
+                        cx="0"
+                        cy="0"
+                        r="8"
+                        fill={colTheme.border}
+                      />
+                    </g>
 
                     {/* Category Header Badge at the tip */}
                     <g
@@ -749,14 +911,8 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                           <g
                             transform={`translate(${cardX}, ${cardY})`}
                             className="cursor-pointer"
-                            onDoubleClick={() =>
-                              onOpenEditModal({
-                                type: 'cause',
-                                catIndex,
-                                causeIndex,
-                                currentText: cause.cause,
-                              })
-                            }
+                            onClick={() => onOpenEditCause(catIndex, causeIndex)}
+                            onDoubleClick={() => onOpenEditCause(catIndex, causeIndex)}
                           >
                             {/* Card Background */}
                             <rect
@@ -790,6 +946,29 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                             >
                               {cat.category} · Penyebab #{causeIndex + 1}
                             </text>
+
+                            {/* Direct Edit Button on Card */}
+                            <g
+                              transform={`translate(${cardWidth - 95}, 4)`}
+                              className="cursor-pointer hover:opacity-85 no-print"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenEditCause(catIndex, causeIndex);
+                              }}
+                            >
+                              <rect width="80" height="20" rx="4" fill="rgba(255,255,255,0.3)" />
+                              <text
+                                x="40"
+                                y="14"
+                                fill="#ffffff"
+                                fontSize="11px"
+                                fontWeight="bold"
+                                textAnchor="middle"
+                                className="problem-text select-none"
+                              >
+                                ✎ Edit Cause
+                              </text>
+                            </g>
 
                             {/* Cause Title */}
                             <g transform="translate(16, 52)">
@@ -953,43 +1132,52 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
             </>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={() => {
-                  let text = '';
-                  if (contextMenu.type === 'category' && contextMenu.catIndex !== undefined) {
-                    text = categories[contextMenu.catIndex].category;
-                  } else if (
-                    contextMenu.type === 'cause' &&
-                    contextMenu.catIndex !== undefined &&
-                    contextMenu.causeIndex !== undefined
-                  ) {
-                    text =
-                      categories[contextMenu.catIndex].causes[contextMenu.causeIndex].cause;
-                  } else if (
-                    contextMenu.type === 'detail' &&
-                    contextMenu.catIndex !== undefined &&
-                    contextMenu.causeIndex !== undefined &&
-                    contextMenu.detailIndex !== undefined
-                  ) {
-                    text =
-                      categories[contextMenu.catIndex].causes[contextMenu.causeIndex]
-                        .details[contextMenu.detailIndex];
-                  }
-                  onOpenEditModal({
-                    type: contextMenu.type,
-                    catIndex: contextMenu.catIndex,
-                    causeIndex: contextMenu.causeIndex,
-                    detailIndex: contextMenu.detailIndex,
-                    currentText: text,
-                  });
-                  setContextMenu((prev) => ({ ...prev, visible: false }));
-                }}
-                className="w-full px-3.5 py-2 text-left hover:bg-slate-100 flex items-center gap-2 cursor-pointer font-medium"
-              >
-                <Edit2 className="w-3.5 h-3.5 text-sky-700" />
-                <span>Edit Teks</span>
-              </button>
+              {contextMenu.type === 'cause' &&
+              contextMenu.catIndex !== undefined &&
+              contextMenu.causeIndex !== undefined ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenEditCause(contextMenu.catIndex!, contextMenu.causeIndex!);
+                    setContextMenu((prev) => ({ ...prev, visible: false }));
+                  }}
+                  className="w-full px-3.5 py-2 text-left hover:bg-slate-100 flex items-center gap-2 cursor-pointer font-medium"
+                >
+                  <Edit2 className="w-3.5 h-3.5 text-sky-700" />
+                  <span>Edit Penyebab & Sub-causes</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    let text = '';
+                    if (contextMenu.type === 'category' && contextMenu.catIndex !== undefined) {
+                      text = categories[contextMenu.catIndex].category;
+                    } else if (
+                      contextMenu.type === 'detail' &&
+                      contextMenu.catIndex !== undefined &&
+                      contextMenu.causeIndex !== undefined &&
+                      contextMenu.detailIndex !== undefined
+                    ) {
+                      text =
+                        categories[contextMenu.catIndex].causes[contextMenu.causeIndex]
+                          .details[contextMenu.detailIndex];
+                    }
+                    onOpenEditModal({
+                      type: contextMenu.type,
+                      catIndex: contextMenu.catIndex,
+                      causeIndex: contextMenu.causeIndex,
+                      detailIndex: contextMenu.detailIndex,
+                      currentText: text,
+                    });
+                    setContextMenu((prev) => ({ ...prev, visible: false }));
+                  }}
+                  className="w-full px-3.5 py-2 text-left hover:bg-slate-100 flex items-center gap-2 cursor-pointer font-medium"
+                >
+                  <Edit2 className="w-3.5 h-3.5 text-sky-700" />
+                  <span>Edit Teks</span>
+                </button>
+              )}
 
               {contextMenu.type === 'category' && contextMenu.catIndex !== undefined && (
                 <button

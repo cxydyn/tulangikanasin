@@ -129,6 +129,9 @@ export const ActionPlanSection: React.FC<ActionPlanSectionProps> = ({
                   className="hover:bg-sky-50/40 transition-colors odd:bg-white even:bg-slate-50/50"
                 >
                   <td className="p-2 border-r border-slate-200 align-top">
+                    <div className="hidden print-text-visible font-semibold text-sky-950">
+                      {row.category || '-'}
+                    </div>
                     <input
                       type="text"
                       value={row.category}
@@ -136,10 +139,13 @@ export const ActionPlanSection: React.FC<ActionPlanSectionProps> = ({
                         handleUpdateRow(tableType, idx, 'category', e.target.value)
                       }
                       placeholder="e.g. Machine"
-                      className="w-full px-2 py-1 text-xs bg-transparent border-0 rounded-sm focus:ring-1 focus:ring-sky-600 font-semibold text-sky-950"
+                      className="print-input-hidden w-full px-2 py-1 text-xs bg-transparent border-0 rounded-sm focus:ring-1 focus:ring-sky-600 font-semibold text-sky-950"
                     />
                   </td>
                   <td className="p-2 border-r border-slate-200 align-top">
+                    <div className="hidden print-text-visible font-semibold text-slate-900 leading-snug">
+                      {row.cause || '-'}
+                    </div>
                     <textarea
                       rows={2}
                       value={row.cause}
@@ -147,10 +153,13 @@ export const ActionPlanSection: React.FC<ActionPlanSectionProps> = ({
                         handleUpdateRow(tableType, idx, 'cause', e.target.value)
                       }
                       placeholder="Penyebab utama"
-                      className="w-full px-2 py-1 text-xs bg-transparent border-0 rounded-sm focus:ring-1 focus:ring-sky-600 resize-none font-medium text-slate-900 leading-snug"
+                      className="print-input-hidden w-full px-2 py-1 text-xs bg-transparent border-0 rounded-sm focus:ring-1 focus:ring-sky-600 resize-none font-medium text-slate-900 leading-snug"
                     />
                   </td>
                   <td className="p-2 border-r border-slate-200 align-top">
+                    <div className="hidden print-text-visible text-slate-800 leading-snug">
+                      {row.subCause || '-'}
+                    </div>
                     <textarea
                       rows={2}
                       value={row.subCause}
@@ -158,10 +167,13 @@ export const ActionPlanSection: React.FC<ActionPlanSectionProps> = ({
                         handleUpdateRow(tableType, idx, 'subCause', e.target.value)
                       }
                       placeholder="Detail atau sub-penyebab..."
-                      className="w-full px-2 py-1 text-xs bg-transparent border-0 rounded-sm focus:ring-1 focus:ring-sky-600 resize-none text-slate-700 leading-snug"
+                      className="print-input-hidden w-full px-2 py-1 text-xs bg-transparent border-0 rounded-sm focus:ring-1 focus:ring-sky-600 resize-none text-slate-700 leading-snug"
                     />
                   </td>
                   <td className="p-2 border-r border-slate-200 align-top">
+                    <div className="hidden print-text-visible text-slate-900 leading-snug font-medium">
+                      {row.action || '-'}
+                    </div>
                     <textarea
                       rows={2}
                       value={row.action}
@@ -169,10 +181,13 @@ export const ActionPlanSection: React.FC<ActionPlanSectionProps> = ({
                         handleUpdateRow(tableType, idx, 'action', e.target.value)
                       }
                       placeholder="Rekomendasi tindakan terukur..."
-                      className="w-full px-2 py-1 text-xs bg-transparent border-0 rounded-sm focus:ring-1 focus:ring-sky-600 resize-none text-slate-900 leading-snug font-medium"
+                      className="print-input-hidden w-full px-2 py-1 text-xs bg-transparent border-0 rounded-sm focus:ring-1 focus:ring-sky-600 resize-none text-slate-900 leading-snug font-medium"
                     />
                   </td>
                   <td className="p-2 border-r border-slate-200 align-top">
+                    <div className="hidden print-text-visible text-slate-800">
+                      {row.pic || '-'}
+                    </div>
                     <input
                       type="text"
                       value={row.pic}
@@ -180,17 +195,20 @@ export const ActionPlanSection: React.FC<ActionPlanSectionProps> = ({
                         handleUpdateRow(tableType, idx, 'pic', e.target.value)
                       }
                       placeholder="Person In Charge"
-                      className="w-full px-2 py-1 text-xs bg-transparent border-0 rounded-sm focus:ring-1 focus:ring-sky-600 text-slate-700"
+                      className="print-input-hidden w-full px-2 py-1 text-xs bg-transparent border-0 rounded-sm focus:ring-1 focus:ring-sky-600 text-slate-700"
                     />
                   </td>
                   <td className="p-2 border-r border-slate-200 align-top">
+                    <div className="hidden print-text-visible text-slate-800 font-mono">
+                      {row.dueDate || '-'}
+                    </div>
                     <input
                       type="date"
                       value={row.dueDate}
                       onChange={(e) =>
                         handleUpdateRow(tableType, idx, 'dueDate', e.target.value)
                       }
-                      className="w-full px-1.5 py-1 text-xs bg-transparent border-0 rounded-sm focus:ring-1 focus:ring-sky-600 text-slate-700 font-mono"
+                      className="print-input-hidden w-full px-1.5 py-1 text-xs bg-transparent border-0 rounded-sm focus:ring-1 focus:ring-sky-600 text-slate-700 font-mono"
                     />
                   </td>
                   <td className="p-2 align-middle text-center no-print">

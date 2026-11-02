@@ -5,9 +5,11 @@ import { FishboneCanvas } from './components/FishboneCanvas';
 import { ActionPlanSection } from './components/ActionPlanSection';
 import { SettingsModal } from './components/SettingsModal';
 import { EditItemModal } from './components/EditItemModal';
+import { EditCauseModal } from './components/EditCauseModal';
 import {
   ActionPlanRow,
   FishboneCategory,
+  FishboneCause,
   FishboneProject,
   FishboneSettings,
   RawAiAnalysisResponse,
@@ -23,11 +25,29 @@ import { SampleIncident, SAMPLE_INCIDENTS } from './data/sampleIncidents';
 
 const DEFAULT_SETTINGS: FishboneSettings = {
   categorySpacing: 1200,
+  boneAngle: 55,
+  boneLength: 1500,
+  lineWidth: 12,
+  fontFamily: 'sans',
   headScale: 1.0,
   fontScale: 1.0,
   paperSize: 'A3',
   theme: 'ocean',
+  customApiKey: '',
 };
+
+function getInitialSettings(): FishboneSettings {
+  try {
+    const saved = localStorage.getItem('fishbone_settings');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return { ...DEFAULT_SETTINGS, ...parsed };
+    }
+  } catch (e) {
+    console.error('Failed to read settings from localStorage', e);
+  }
+  return DEFAULT_SETTINGS;
+}
 
 export default function App() {
   const [problem, setProblem] = useState<string>('Masalah');
@@ -59,12 +79,28 @@ export default function App() {
     },
   ]);
 
-  const [settings, setSettings] = useState<FishboneSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<FishboneSettings>(getInitialSettings);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const handleUpdateSettings = (newPartial: Partial<FishboneSettings>) => {
+    setSettings((prev) => {
+      const merged = { ...prev, ...newPartial };
+      try {
+        localStorage.setItem('fishbone_settings', JSON.stringify(merged));
+      } catch (e) {
+        console.error('Failed to save settings to localStorage', e);
+      }
+      return merged;
+    });
+  };
+
   // Modals state
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [editCauseTarget, setEditCauseTarget] = useState<{
+    catIndex: number;
+    causeIndex: number;
+  } | null>(null);
   const [editTarget, setEditTarget] = useState<{
     type: 'problem' | 'category' | 'cause' | 'detail';
     catIndex?: number;
@@ -92,10 +128,18 @@ export default function App() {
     setErrorMessage(null);
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (settings.customApiKey?.trim()) {
+        headers['x-gemini-api-key'] = settings.customApiKey.trim();
+      }
+
       const response = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: textToAnalyze }),
+        headers,
+        body: JSON.stringify({
+          description: textToAnalyze,
+          customApiKey: settings.customApiKey?.trim(),
+        }),
       });
 
       const data = await response.json();
@@ -319,6 +363,56 @@ export default function App() {
     }
   };
 
+  // Full Cause & Sub-cause Modal Save Handler
+  const handleSaveCause = (
+    catIndex: number,
+    causeIndex: number,
+    updatedCause: FishboneCause
+  ) => {
+    const oldCause = categories[catIndex]?.causes[causeIndex]?.cause || '';
+    const catName = categories[catIndex]?.category || '';
+
+    // 1. Update categories state
+    const updatedCats = [...categories];
+    updatedCats[catIndex].causes[causeIndex] = updatedCause;
+    setCategories(updatedCats);
+
+    // 2. Synchronize correctivePlan & preventivePlan
+    const syncPlan = (rows: ActionPlanRow[]) =>
+      rows.map((row) => {
+        if (row.category === catName && row.cause === oldCause) {
+          return {
+            ...row,
+            cause: updatedCause.cause,
+            subCause: updatedCause.details.join('; '),
+            action: updatedCause.actionPlan || row.action,
+          };
+        }
+        return row;
+      });
+
+    setCorrectivePlan((prev) => syncPlan(prev));
+    setPreventivePlan((prev) => syncPlan(prev));
+  };
+
+  // Delete Cause Handler
+  const handleDeleteCause = (catIndex: number, causeIndex: number) => {
+    const oldCause = categories[catIndex]?.causes[causeIndex]?.cause || '';
+    const catName = categories[catIndex]?.category || '';
+
+    const updatedCats = [...categories];
+    updatedCats[catIndex].causes.splice(causeIndex, 1);
+    setCategories(updatedCats);
+
+    // Clean up corresponding rows in action plan tables
+    setCorrectivePlan((prev) =>
+      prev.filter((r) => !(r.category === catName && r.cause === oldCause))
+    );
+    setPreventivePlan((prev) =>
+      prev.filter((r) => !(r.category === catName && r.cause === oldCause))
+    );
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       {/* Hidden Global File Input */}
@@ -369,9 +463,42 @@ export default function App() {
           />
         </div>
 
+        {/* Executive Print Report Header (Visible only on Print / PDF export) */}
+        <div className="hidden print:block mb-4 pb-3 border-b-2 border-slate-900">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-extrabold uppercase tracking-tight text-slate-900">
+                Laporan Analisis Akar Masalah (Root Cause Analysis - Ishikawa 6M)
+              </h1>
+              <p className="text-xs text-slate-600 font-semibold mt-0.5">
+                Metode Fishbone 6M & Rencana Aksi Korektif/Preventif Terintegrasi
+              </p>
+            </div>
+            <div className="text-right text-[11px] text-slate-600">
+              <div>Tanggal: {new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}</div>
+              <div className="font-semibold text-slate-800">Status: Terverifikasi</div>
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-3 gap-3 bg-slate-50 p-2.5 rounded-lg border border-slate-300 text-xs">
+            <div>
+              <span className="font-bold text-slate-800 block text-[10px] uppercase tracking-wider">
+                Pernyataan Masalah (Problem Statement)
+              </span>
+              <span className="font-extrabold text-sky-950 text-sm">{problem || '-'}</span>
+            </div>
+            <div className="col-span-2">
+              <span className="font-bold text-slate-800 block text-[10px] uppercase tracking-wider">
+                Ringkasan Kesimpulan Akar Masalah (Conclusion)
+              </span>
+              <span className="text-slate-800 italic">{conclusion || 'Belum diisi atau dianalisis'}</span>
+            </div>
+          </div>
+        </div>
+
         {/* Fishbone Diagram Canvas */}
         <div ref={diagramRef} className="space-y-2">
-          <div className="flex items-center justify-between px-1">
+          <div className="flex items-center justify-between px-1 no-print">
             <h2 className="text-base font-bold text-slate-900">
               Visualisasi Diagram Ishikawa (6M)
             </h2>
@@ -386,8 +513,11 @@ export default function App() {
             onUpdateProblem={setProblem}
             onUpdateCategories={setCategories}
             settings={settings}
-            onUpdateSettings={(newPartial) => setSettings({ ...settings, ...newPartial })}
+            onUpdateSettings={handleUpdateSettings}
             onOpenEditModal={setEditTarget}
+            onOpenEditCause={(catIndex, causeIndex) =>
+              setEditCauseTarget({ catIndex, causeIndex })
+            }
           />
         </div>
 
@@ -417,7 +547,7 @@ export default function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         settings={settings}
-        onSave={(newSettings) => setSettings(newSettings)}
+        onSave={handleUpdateSettings}
       />
 
       {/* Edit Text Modal */}
@@ -427,6 +557,22 @@ export default function App() {
         target={editTarget}
         onSave={handleSaveModalText}
       />
+
+      {/* Edit Cause & Sub-cause Modal */}
+      {editCauseTarget && (
+        <EditCauseModal
+          isOpen={Boolean(editCauseTarget)}
+          onClose={() => setEditCauseTarget(null)}
+          catIndex={editCauseTarget.catIndex}
+          causeIndex={editCauseTarget.causeIndex}
+          categoryName={categories[editCauseTarget.catIndex]?.category || ''}
+          causeData={
+            categories[editCauseTarget.catIndex]?.causes[editCauseTarget.causeIndex] || null
+          }
+          onSave={handleSaveCause}
+          onDelete={handleDeleteCause}
+        />
+      )}
     </div>
   );
 }

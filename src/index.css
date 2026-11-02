@@ -11,25 +11,25 @@
   }
 }
 
-/* SVG Text styling to ensure high readability */
+/* SVG Text styling */
 .fishbone-svg text {
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-  paint-order: stroke fill;
-  stroke: rgba(255, 255, 255, 0.95);
-  stroke-width: 6px;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .fishbone-svg .problem-text {
   stroke: none !important;
 }
 
-/* Print Styles: A3 / A4 Landscape */
+/* Executive Report Print Styles: A3 / A4 Landscape */
 @media print {
   @page {
     size: landscape;
     margin: 8mm;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   body {
@@ -37,47 +37,105 @@
     padding: 0 !important;
     background: white !important;
     color: black !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    font-size: 11pt;
   }
 
-  /* Hide navigation, AI inputs, modal overlays, controls during print */
+  main {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hide interactive web UI during print */
   header,
+  footer,
   .no-print,
   .action-btn-container,
   .context-menu-portal,
-  button,
-  textarea {
+  button {
     display: none !important;
   }
 
+  /* Page 1: Diagram Ishikawa 6M */
   .print-page-diagram {
     page-break-after: always;
+    break-after: page;
     page-break-inside: avoid;
-    height: 96vh !important;
+    break-inside: avoid;
     width: 100% !important;
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    display: block !important;
   }
 
+  .print-page-diagram > div {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .print-page-diagram svg {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 180mm !important;
+    object-fit: contain !important;
+    display: block !important;
+    margin: 0 auto !important;
+  }
+
+  .fishbone-viewport-group {
+    transform: translate(0px, 0px) scale(1) !important;
+  }
+
+  /* Page 2 & 3: Action Plan Tables */
   .print-page-table {
     page-break-before: always;
+    break-before: page;
+    page-break-inside: avoid;
+    break-inside: avoid;
     width: 100% !important;
     margin-top: 0 !important;
-    padding: 10mm !important;
+    margin-bottom: 15mm !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
   }
 
-  table {
-    page-break-inside: auto;
+  .print-page-table table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    border: 1.5px solid #0f172a !important;
   }
 
-  tr {
-    page-break-inside: avoid;
-    page-break-after: auto;
+  .print-page-table th,
+  .print-page-table td {
+    border: 1px solid #475569 !important;
+    padding: 8px 10px !important;
+    font-size: 9pt !important;
   }
 
-  thead {
-    display: table-header-group;
+  .print-page-table th {
+    background-color: #0c4a6e !important;
+    color: #ffffff !important;
+    font-weight: bold !important;
+  }
+
+  .print-page-table tr:nth-child(even) {
+    background-color: #f8fafc !important;
+  }
+
+  .print-input-hidden {
+    display: none !important;
+  }
+
+  .print-text-visible {
+    display: block !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
   }
 }

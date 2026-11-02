@@ -38,7 +38,11 @@ app.get('/api/health', (req, res) => {
 
 // AI Fishbone Analysis endpoint
 app.post('/api/analyze', async (req, res) => {
-  const { description } = req.body;
+  const { description, customApiKey } = req.body;
+  const clientKey = (req.headers['x-gemini-api-key'] as string) || customApiKey || '';
+  const effectiveApiKey = (typeof clientKey === 'string' && clientKey.trim())
+    ? clientKey.trim()
+    : (process.env.GEMINI_API_KEY || '');
 
   if (!description || typeof description !== 'string' || !description.trim()) {
     return res.status(400).json({
@@ -46,11 +50,23 @@ app.post('/api/analyze', async (req, res) => {
     });
   }
 
-  if (!ai) {
-    return res.status(500).json({
-      error: 'GEMINI_API_KEY belum disetel pada server. Pastikan API key telah ditambahkan di Settings > Secrets.',
+  if (!effectiveApiKey) {
+    return res.status(400).json({
+      error: 'GEMINI_API_KEY belum disetel. Anda dapat memasukkan API Key di menu Pengaturan (Layout/Settings) atau menambahkan GEMINI_API_KEY di file .env server.',
     });
   }
+
+  // Use custom client if clientKey is provided, otherwise use shared client
+  const activeAi = effectiveApiKey === process.env.GEMINI_API_KEY && ai
+    ? ai
+    : new GoogleGenAI({
+        apiKey: effectiveApiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          },
+        },
+      });
 
   const systemInstruction = `You are an expert Root Cause Analysis (RCA) facilitator and industrial safety engineer.
 Your job is to analyze incident descriptions and chronology, determine the core problem, and construct a comprehensive Fishbone (Ishikawa) Diagram structure categorized into the standard 6M framework:
@@ -77,7 +93,7 @@ CRITICAL INSTRUCTIONS:
 
   while (attempt < maxRetries) {
     try {
-      const response = await ai.models.generateContent({
+      const response = await activeAi.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: `Analyze this incident report and create the 6M Fishbone RCA:\n\n${description.trim()}`,
         config: {

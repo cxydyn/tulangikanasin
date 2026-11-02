@@ -12,6 +12,8 @@ export interface FishboneCategory {
   isTop: boolean;
   customX?: number;
   customY?: number;
+  customAngle?: number;
+  customLength?: number;
 }
 
 export interface ActionPlanRow {
@@ -26,10 +28,15 @@ export interface ActionPlanRow {
 
 export interface FishboneSettings {
   categorySpacing: number;
+  boneAngle: number;
+  boneLength: number;
+  lineWidth: number;
+  fontFamily: 'sans' | 'serif' | 'mono';
   headScale: number;
   fontScale: number;
   paperSize: 'A3' | 'A4';
   theme: 'ocean' | 'slate' | 'emerald';
+  customApiKey?: string;
 }
 
 export interface FishboneProject {
