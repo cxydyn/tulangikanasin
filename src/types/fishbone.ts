@@ -3,6 +3,10 @@ export interface FishboneCause {
   cause: string;
   details: string[];
   actionPlan?: string;
+  customX?: number;
+  customY?: number;
+  customWidth?: number;
+  customHeight?: number;
 }
 
 export interface FishboneCategory {
@@ -30,10 +34,12 @@ export interface FishboneSettings {
   categorySpacing: number;
   boneAngle: number;
   boneLength: number;
+  boneDirection: 'toward-tail' | 'toward-head';
   lineWidth: number;
   fontFamily: 'sans' | 'serif' | 'mono';
   headScale: number;
   fontScale: number;
+  cardWidth: number;
   paperSize: 'A3' | 'A4';
   theme: 'ocean' | 'slate' | 'emerald';
   customApiKey?: string;

@@ -12,6 +12,7 @@ import {
   ChevronRight,
   ShieldAlert,
   RotateCcw,
+  Move,
 } from 'lucide-react';
 import { FishboneCategory, FishboneSettings } from '../types/fishbone';
 import { calculateDiagramLayout, wrapTextLines } from '../utils/fishboneLogic';
@@ -158,7 +159,7 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
 
   // Dragging elements
   const [draggingTarget, setDraggingTarget] = useState<{
-    type: 'head' | 'category' | 'bone-tip' | 'cause';
+    type: 'head' | 'category' | 'bone-tip' | 'card' | 'card-resize';
     catIndex?: number;
     causeIndex?: number;
   } | null>(null);
@@ -259,6 +260,36 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
     dragInitialPosRef.current = { x: currentEndX, y: currentEndY };
   };
 
+  // Dragging Card Mouse Down (Freely move card)
+  const handleMouseDownCard = (
+    e: React.MouseEvent,
+    catIndex: number,
+    causeIndex: number,
+    currentCardX: number,
+    currentCardY: number
+  ) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    setDraggingTarget({ type: 'card', catIndex, causeIndex });
+    dragStartMouseRef.current = { x: e.clientX, y: e.clientY };
+    dragInitialPosRef.current = { x: currentCardX, y: currentCardY };
+  };
+
+  // Dragging Card Resize Handle Mouse Down (Resize card)
+  const handleMouseDownCardResize = (
+    e: React.MouseEvent,
+    catIndex: number,
+    causeIndex: number,
+    currentWidth: number,
+    currentHeight: number
+  ) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    setDraggingTarget({ type: 'card-resize', catIndex, causeIndex });
+    dragStartMouseRef.current = { x: e.clientX, y: e.clientY };
+    dragInitialPosRef.current = { x: currentWidth, y: currentHeight };
+  };
+
   // Mouse Move listener
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -308,6 +339,40 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
             customLength: Math.round(newLength),
             customAngle: Math.round(deg),
           };
+          onUpdateCategories(updated);
+        } else if (
+          draggingTarget.type === 'card' &&
+          draggingTarget.catIndex !== undefined &&
+          draggingTarget.causeIndex !== undefined
+        ) {
+          const cIdx = draggingTarget.catIndex;
+          const causeIdx = draggingTarget.causeIndex;
+          const updated = [...categories];
+          const causes = [...updated[cIdx].causes];
+          causes[causeIdx] = {
+            ...causes[causeIdx],
+            customX: Math.round(dragInitialPosRef.current.x + dx),
+            customY: Math.round(dragInitialPosRef.current.y + dy),
+          };
+          updated[cIdx] = { ...updated[cIdx], causes };
+          onUpdateCategories(updated);
+        } else if (
+          draggingTarget.type === 'card-resize' &&
+          draggingTarget.catIndex !== undefined &&
+          draggingTarget.causeIndex !== undefined
+        ) {
+          const cIdx = draggingTarget.catIndex;
+          const causeIdx = draggingTarget.causeIndex;
+          const newW = Math.max(300, Math.min(850, dragInitialPosRef.current.x + dx));
+          const newH = Math.max(120, Math.min(950, dragInitialPosRef.current.y + dy));
+          const updated = [...categories];
+          const causes = [...updated[cIdx].causes];
+          causes[causeIdx] = {
+            ...causes[causeIdx],
+            customWidth: Math.round(newW),
+            customHeight: Math.round(newH),
+          };
+          updated[cIdx] = { ...updated[cIdx], causes };
           onUpdateCategories(updated);
         }
       }
@@ -454,7 +519,16 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
     onUpdateSettings({ boneAngle: next });
   };
 
-  // Reset all custom bone positions and angles
+  // Bone slant direction (default: toward-tail)
+  const isTowardTail = (settings.boneDirection || 'toward-tail') === 'toward-tail';
+
+  // Toggle bone slant direction
+  const handleToggleDirection = () => {
+    const next = isTowardTail ? 'toward-head' : 'toward-tail';
+    onUpdateSettings({ boneDirection: next });
+  };
+
+  // Reset all custom bone positions, angles, and card positions
   const handleResetLines = () => {
     const resetCats = categories.map((c) => ({
       ...c,
@@ -462,6 +536,13 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
       customY: undefined,
       customAngle: undefined,
       customLength: undefined,
+      causes: c.causes.map((cause) => ({
+        ...cause,
+        customX: undefined,
+        customY: undefined,
+        customWidth: undefined,
+        customHeight: undefined,
+      })),
     }));
     onUpdateCategories(resetCats);
     setHeadCustomX(null);
@@ -557,6 +638,21 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
             +
           </button>
         </div>
+
+        <div className="h-4 w-px bg-slate-200 mx-0.5" />
+
+        {/* Direction Toggle */}
+        <button
+          type="button"
+          onClick={handleToggleDirection}
+          title="Ubah Arah Kemiringan Tulang (Menuju Ekor / Menuju Kepala)"
+          className="inline-flex items-center gap-1 px-2 py-1 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-md text-[11px] font-semibold cursor-pointer transition-colors"
+        >
+          <span>Arah:</span>
+          <span className="text-sky-900 font-bold">
+            {isTowardTail ? '◀ Ke Ekor (Standar)' : '▶ Ke Kepala'}
+          </span>
+        </button>
 
         <div className="h-4 w-px bg-slate-200 mx-0.5" />
 
@@ -717,8 +813,10 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
             <g id="bones-layer">
               {categories.map((cat, catIndex) => {
                 const isTop = cat.isTop;
+                const spineOffset = isTowardTail ? 750 : 0;
                 const baseX =
                   layout.startX +
+                  spineOffset +
                   catIndex * categorySpacing +
                   (cat.customX || 0);
                 const baseY = spineY + (cat.customY || 0);
@@ -730,9 +828,11 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                 const boneLength = cat.customLength !== undefined ? cat.customLength : defaultLength;
                 const strokeWidth = settings.lineWidth || 12;
 
-                const angleRad = ((isTop ? -angle : angle) * Math.PI) / 180;
-                const xEnd = baseX + boneLength * Math.cos(angleRad);
-                const yEnd = baseY + boneLength * Math.sin(angleRad);
+                // When toward-tail, ribs angle backwards (left) towards the tail
+                const dirSign = isTowardTail ? -1 : 1;
+                const angleRad = (angle * Math.PI) / 180;
+                const xEnd = baseX + dirSign * boneLength * Math.cos(angleRad);
+                const yEnd = baseY + (isTop ? -1 : 1) * boneLength * Math.sin(angleRad);
 
                 const colTheme = getCategoryColor(cat.category);
                 const causesCount = cat.causes.length;
@@ -771,14 +871,15 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                       transform={`translate(${xEnd}, ${yEnd})`}
                       className="cursor-crosshair no-print group/handle"
                       onMouseDown={(e) => handleMouseDownBoneTip(e, catIndex, xEnd, yEnd)}
+                      title="Drag untuk mengubah sudut & panjang garis tulang ini"
                     >
                       <circle
                         cx="0"
                         cy="0"
-                        r="22"
+                        r="24"
                         fill="#ffffff"
                         stroke={colTheme.border}
-                        strokeWidth="4"
+                        strokeWidth="4.5"
                         filter="url(#shadow)"
                         className="transition-transform group-hover/handle:scale-125"
                       />
@@ -796,7 +897,7 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                       className="cursor-pointer"
                       onDoubleClick={() =>
                         onOpenEditModal({
-                          type: 'category',
+                           type: 'category',
                           catIndex,
                           currentText: cat.category,
                         })
@@ -826,9 +927,9 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                       </text>
                     </g>
 
-                    {/* Anti-Collision Structured Cause Cards */}
+                    {/* Anti-Collision Structured Cause Cards (Draggable & Resizable) */}
                     {cat.causes.map((cause, causeIndex) => {
-                      // Guaranteed non-overlapping step positions
+                      // Guaranteed non-overlapping step positions along bone
                       let step = 0.50;
                       if (causesCount === 2) {
                         step = causeIndex === 0 ? 0.36 : 0.72;
@@ -838,49 +939,65 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                         step = 0.22 + (causeIndex / (causesCount - 1)) * 0.68;
                       }
 
-                      // Coordinates on the bone
+                      // Coordinates of attachment on the bone
                       const cx = baseX + (xEnd - baseX) * step;
                       const cy = baseY + (yEnd - baseY) * step;
 
-                      // Card dimensions
-                      const cardWidth = 470;
-                      const titleLines = wrapTextLines(cause.cause, 28);
+                      // Card dimensions (support custom resize)
+                      const cardWidth = cause.customWidth || settings.cardWidth || 480;
+                      const titleChars = Math.max(16, Math.round(cardWidth / 15));
+                      const titleLines = wrapTextLines(cause.cause, titleChars);
                       const details = cause.details || [];
 
                       // Calculate card height dynamically
-                      let cardHeight = 55 + titleLines.length * 30;
+                      let autoCardHeight = 55 + titleLines.length * 30;
                       if (details.length > 0) {
-                        cardHeight += 15; // gap
+                        autoCardHeight += 15; // gap
                         details.forEach((det) => {
-                          const detLines = wrapTextLines(det, 32);
-                          cardHeight += detLines.length * 24 + 10;
+                          const detLines = wrapTextLines(det, Math.max(18, Math.round(cardWidth / 13)));
+                          autoCardHeight += detLines.length * 24 + 10;
                         });
                       }
                       if (cause.actionPlan) {
-                        const planLines = wrapTextLines(`Rekomendasi: ${cause.actionPlan}`, 32);
-                        cardHeight += planLines.length * 22 + 20;
+                        const planLines = wrapTextLines(`Rekomendasi: ${cause.actionPlan}`, Math.max(18, Math.round(cardWidth / 13)));
+                        autoCardHeight += planLines.length * 22 + 20;
                       }
-                      cardHeight = Math.max(120, cardHeight + 15);
+                      autoCardHeight = Math.max(120, autoCardHeight + 15);
+                      const cardHeight = cause.customHeight || autoCardHeight;
 
-                      // Card X & Y positioning with strict spine clearance
-                      const connectorLen = 70;
-                      const cardX = cx + connectorLen;
-                      let cardY = cy - cardHeight / 2;
+                      // Default card positioning
+                      const defaultCardX = isTowardTail ? (cx - cardWidth - 50) : (cx + 50);
+                      let defaultCardY = cy - cardHeight / 2;
 
-                      // Ensure clearance from central spine (y=1800)
+                      // Strict spine clearance for default position
                       if (isTop) {
-                        if (cardY + cardHeight > spineY - 80) {
-                          cardY = spineY - 80 - cardHeight;
+                        if (defaultCardY + cardHeight > spineY - 80) {
+                          defaultCardY = spineY - 80 - cardHeight;
                         }
-                        if (cardY < 120) cardY = 120;
+                        if (defaultCardY < 120) defaultCardY = 120;
                       } else {
-                        if (cardY < spineY + 80) {
-                          cardY = spineY + 80;
+                        if (defaultCardY < spineY + 80) {
+                          defaultCardY = spineY + 80;
                         }
-                        if (cardY + cardHeight > layout.viewBoxHeight - 120) {
-                          cardY = layout.viewBoxHeight - 120 - cardHeight;
+                        if (defaultCardY + cardHeight > layout.viewBoxHeight - 120) {
+                          defaultCardY = layout.viewBoxHeight - 120 - cardHeight;
                         }
                       }
+
+                      // Actual rendered coordinates (custom draggable or default)
+                      const cardX = cause.customX !== undefined ? cause.customX : defaultCardX;
+                      const cardY = cause.customY !== undefined ? cause.customY : defaultCardY;
+
+                      // Dynamic magnetic connector: connect from (cx, cy) to nearest edge of card
+                      let connectX = cardX;
+                      if (cardX + cardWidth <= cx) {
+                        connectX = cardX + cardWidth;
+                      } else if (cardX >= cx) {
+                        connectX = cardX;
+                      } else {
+                        connectX = (cx - cardX < (cardX + cardWidth) - cx) ? cardX : (cardX + cardWidth);
+                      }
+                      const connectY = Math.max(cardY + 16, Math.min(cardY + cardHeight - 16, cy));
 
                       return (
                         <g
@@ -890,12 +1007,12 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                             openContextMenu(e, 'cause', catIndex, causeIndex)
                           }
                         >
-                          {/* Horizontal connector line from bone to card */}
+                          {/* Dynamic connector line from bone to card */}
                           <line
                             x1={cx}
                             y1={cy}
-                            x2={cardX}
-                            y2={cardY + cardHeight / 2}
+                            x2={connectX}
+                            y2={connectY}
                             stroke={colTheme.border}
                             strokeWidth="5"
                             strokeLinecap="round"
@@ -906,13 +1023,17 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                             r="7"
                             fill={colTheme.border}
                           />
+                          <circle
+                            cx={connectX}
+                            cy={connectY}
+                            r="5"
+                            fill={colTheme.border}
+                          />
 
                           {/* White Card Container */}
                           <g
                             transform={`translate(${cardX}, ${cardY})`}
                             className="cursor-pointer"
-                            onClick={() => onOpenEditCause(catIndex, causeIndex)}
-                            onDoubleClick={() => onOpenEditCause(catIndex, causeIndex)}
                           >
                             {/* Card Background */}
                             <rect
@@ -928,11 +1049,39 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                               className="transition-all group-hover:stroke-sky-600"
                             />
 
-                            {/* Top Accent Strip */}
-                            <path
-                              d={`M 0 14 Q 0 0 14 0 L ${cardWidth - 14} 0 Q ${cardWidth} 0 ${cardWidth} 14 L ${cardWidth} 28 L 0 28 Z`}
-                              fill={colTheme.border}
-                            />
+                            {/* Top Accent Strip with Drag Grip Handle */}
+                            <g
+                              className="cursor-grab active:cursor-grabbing no-print"
+                              onMouseDown={(e) =>
+                                handleMouseDownCard(e, catIndex, causeIndex, cardX, cardY)
+                              }
+                              title="Drag kartu ini untuk mengatur posisi bebas pada diagram (Double-click untuk reset posisi)"
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                const updated = [...categories];
+                                const causes = [...updated[catIndex].causes];
+                                causes[causeIndex] = {
+                                  ...causes[causeIndex],
+                                  customX: undefined,
+                                  customY: undefined,
+                                };
+                                updated[catIndex] = { ...updated[catIndex], causes };
+                                onUpdateCategories(updated);
+                              }}
+                            >
+                              <path
+                                d={`M 0 14 Q 0 0 14 0 L ${cardWidth - 14} 0 Q ${cardWidth} 0 ${cardWidth} 14 L ${cardWidth} 28 L 0 28 Z`}
+                                fill={colTheme.border}
+                              />
+                              {/* Drag Grip Dots */}
+                              <g transform={`translate(${cardWidth / 2 - 20}, 9)`} opacity="0.8">
+                                <circle cx="0" cy="4" r="2" fill="#ffffff" />
+                                <circle cx="10" cy="4" r="2" fill="#ffffff" />
+                                <circle cx="20" cy="4" r="2" fill="#ffffff" />
+                                <circle cx="30" cy="4" r="2" fill="#ffffff" />
+                                <circle cx="40" cy="4" r="2" fill="#ffffff" />
+                              </g>
+                            </g>
 
                             {/* Category Micro-tag */}
                             <text
@@ -942,7 +1091,7 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                               fontSize="13px"
                               fontWeight="800"
                               letterSpacing="1px"
-                              className="problem-text uppercase"
+                              className="problem-text uppercase select-none pointer-events-none"
                             >
                               {cat.category} · Penyebab #{causeIndex + 1}
                             </text>
@@ -971,7 +1120,10 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                             </g>
 
                             {/* Cause Title */}
-                            <g transform="translate(16, 52)">
+                            <g
+                              transform="translate(16, 52)"
+                              onClick={() => onOpenEditCause(catIndex, causeIndex)}
+                            >
                               <text
                                 x="0"
                                 y="0"
@@ -1003,10 +1155,10 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                             {/* Bulleted Sub-cause Details */}
                             <g transform={`translate(16, ${52 + titleLines.length * 28 + 24})`}>
                               {details.map((det, dIdx) => {
-                                const detLines = wrapTextLines(det, 34);
+                                const detLines = wrapTextLines(det, Math.max(18, Math.round(cardWidth / 13)));
                                 const prevOffsets = details
                                   .slice(0, dIdx)
-                                  .reduce((acc, curr) => acc + wrapTextLines(curr, 34).length * 24 + 10, 0);
+                                  .reduce((acc, curr) => acc + wrapTextLines(curr, Math.max(18, Math.round(cardWidth / 13))).length * 24 + 10, 0);
 
                                 return (
                                   <g
@@ -1073,6 +1225,32 @@ export const FishboneCanvas: React.FC<FishboneCanvasProps> = ({
                                 </text>
                               </g>
                             )}
+
+                            {/* Interactive Resize Handle at bottom-right corner */}
+                            <g
+                              transform={`translate(${cardWidth - 26}, ${cardHeight - 26})`}
+                              className="cursor-nwse-resize no-print group/resize"
+                              onMouseDown={(e) =>
+                                handleMouseDownCardResize(e, catIndex, causeIndex, cardWidth, cardHeight)
+                              }
+                              title="Drag sudut ini untuk resize kartu (Double-click untuk reset ukuran)"
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                const updated = [...categories];
+                                const causes = [...updated[catIndex].causes];
+                                causes[causeIndex] = {
+                                  ...causes[causeIndex],
+                                  customWidth: undefined,
+                                  customHeight: undefined,
+                                };
+                                updated[catIndex] = { ...updated[catIndex], causes };
+                                onUpdateCategories(updated);
+                              }}
+                            >
+                              <rect x="0" y="0" width="26" height="26" fill="transparent" />
+                              <line x1="8" y1="22" x2="22" y2="8" stroke={colTheme.border} strokeWidth="2.5" strokeLinecap="round" />
+                              <line x1="15" y1="22" x2="22" y2="15" stroke={colTheme.border} strokeWidth="2.5" strokeLinecap="round" />
+                            </g>
                           </g>
                         </g>
                       );
